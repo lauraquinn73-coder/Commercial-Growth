@@ -752,7 +752,7 @@ function showSnapshot(priorities) {
       <p class="request-note">Requesting an Audit does not take payment here. It lets Laura know you want to move forward so fit, scope and next steps can be confirmed first.</p>
       <div class="snapshot-actions">
         <button class="button primary" id="request-audit" type="button">Request my Audit</button>
-        <a class="button secondary" id="ask-question" href="${questionMailtoUrl}">I have a question first</a>
+        <button class="button secondary" id="ask-question" type="button">I have a question first</button>
       </div>
       <div id="intent-confirmation"></div>
     </div>`;
@@ -762,7 +762,14 @@ function showSnapshot(priorities) {
   trackEvent('cg_price_viewed', { audit_price: (CONFIG.auditLaunchPrice || '349').replace(/\D/g, '') });
 
   document.getElementById('request-audit').addEventListener('click', requestAudit);
-  document.getElementById('ask-question').addEventListener('click', () => trackEvent('cg_question_clicked'));
+  document.getElementById('ask-question').addEventListener('click', (event) => {
+    event.preventDefault();
+    trackEvent('cg_question_clicked');
+    // Explicitly hand the draft to the device's default email app.
+    // Using a button + mailto assignment is more reliable inside mobile/in-app browsers
+    // than letting the browser navigate an injected anchor itself.
+    window.location.href = questionMailtoUrl;
+  });
 }
 
 async function requestAudit() {
