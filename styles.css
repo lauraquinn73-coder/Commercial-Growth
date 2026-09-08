@@ -446,3 +446,195 @@ body.check-open { overflow: hidden; }
   .cookie-actions { margin-top: 12px; }
   .cookie-actions .button { width: auto; flex: 1; }
 }
+
+/* Launch polish: clearer anchors, stronger about treatment, single-screen Growth Check */
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
+.about-title span {
+  display: block;
+  width: fit-content;
+  margin-top: .14em;
+  font-weight: 600;
+  color: var(--charcoal);
+  position: relative;
+  padding-bottom: .12em;
+}
+.about-title span::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 12%;
+  bottom: 0;
+  height: 4px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--rose), rgba(201,137,131,.12));
+}
+.signature { margin-top: 28px; }
+
+/* Keep the two services distinct so Audit and Consultancy nav links land separately. */
+.offer-grid {
+  grid-template-columns: 1fr;
+  gap: 26px;
+  max-width: 1080px;
+}
+.offer-card {
+  min-height: 0;
+  scroll-margin-top: 104px;
+  padding: clamp(30px, 4vw, 52px);
+}
+.offer-card h3 { margin-top: 36px; }
+#consultancy { background: var(--cream); }
+
+/* The diagnostic is intentionally a no-scroll, one-question-at-a-time experience. */
+.check-shell {
+  width: min(1000px, calc(100vw - 28px));
+  height: min(760px, calc(100svh - 28px));
+  min-height: 0;
+}
+.check-header { padding: 12px 20px; }
+.check-close { width: 38px; height: 38px; font-size: 25px; }
+.check-body {
+  overflow: hidden;
+  padding: clamp(20px, 4.2vh, 40px) clamp(24px, 5vw, 60px);
+  display: grid;
+  align-items: stretch;
+  min-height: 0;
+}
+#diagnostic-form {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  display: grid;
+  align-items: center;
+}
+.question-card {
+  width: min(800px, 100%);
+  max-width: 800px;
+  max-height: 100%;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 0;
+}
+.question-copy { flex: 0 0 auto; }
+.question-card h2 {
+  font-size: clamp(34px, 4.4vw, 56px);
+  margin-bottom: 12px;
+  line-height: 1.04;
+}
+.question-kicker { margin-bottom: 7px; }
+.question-help { margin: -1px 0 15px; line-height: 1.4; }
+.option-grid {
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 15px;
+  min-height: 0;
+}
+.option-button {
+  min-height: 50px;
+  padding: 11px 14px;
+  border-radius: 12px;
+  line-height: 1.25;
+  font-size: 14px;
+}
+.option-button:disabled:not(.selected) {
+  opacity: .42;
+  cursor: not-allowed;
+  transform: none;
+}
+.multi-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 14px;
+}
+.selection-count {
+  color: var(--muted);
+  font-size: 12px;
+}
+.multi-continue { min-width: 126px; }
+.multi-continue:disabled { opacity: .42; cursor: not-allowed; transform: none; }
+.question-input, .question-textarea {
+  font-size: clamp(19px, 2.4vw, 28px);
+  padding: 10px 2px;
+}
+.question-textarea {
+  min-height: 88px;
+  max-height: 118px;
+  resize: none;
+  font-size: 18px;
+}
+.question-actions { margin-top: 16px; }
+.check-footer { min-height: 48px; padding: 8px 20px; }
+
+/* Keep consent/result screens contained too, while preserving a fallback on unusually short devices. */
+.check-stage.active { max-height: 100%; }
+.consent-box { margin: 18px 0; padding: 14px; }
+.snapshot-top { margin-bottom: 18px; }
+.snapshot-grid { margin: 18px 0 22px; }
+.price-reveal { padding-top: 22px; }
+
+@media (max-width: 700px) {
+  .check-shell { width: 100%; height: 100svh; border: 0; }
+  .check-header { padding: 9px 13px; }
+  .check-body { padding: 14px 16px; }
+  .check-footer { min-height: 44px; padding: 6px 14px; }
+  .question-card h2 { font-size: clamp(30px, 8.5vw, 42px); }
+  .question-help { font-size: 13px; margin-bottom: 10px; }
+  .option-grid { grid-template-columns: 1fr; gap: 6px; margin-top: 10px; }
+  .option-button { min-height: 42px; padding: 9px 12px; font-size: 13px; border-radius: 10px; }
+  .multi-option-grid .option-button { min-height: 40px; }
+  .multi-actions { margin-top: 9px; }
+  .multi-continue { width: auto; min-height: 42px; padding: 9px 16px; }
+  .question-input { font-size: 21px; }
+  .question-textarea { min-height: 76px; max-height: 84px; }
+  .question-actions { flex-direction: row; align-items: center; margin-top: 12px; }
+  .question-actions .button { width: auto; min-height: 42px; padding: 9px 16px; }
+  .enter-note { display: inline; }
+}
+
+@media (max-height: 690px) {
+  .check-header { padding-top: 7px; padding-bottom: 7px; }
+  .check-brand { transform: scale(.82); }
+  .check-close { width: 34px; height: 34px; }
+  .check-body { padding-top: 10px; padding-bottom: 10px; }
+  .check-footer { min-height: 40px; padding-top: 4px; padding-bottom: 4px; }
+  .question-card h2 { font-size: clamp(28px, 5.2vh, 40px); margin-bottom: 8px; }
+  .question-kicker { margin-bottom: 4px; }
+  .question-help { margin-bottom: 8px; font-size: 12px; }
+  .option-grid { gap: 5px; margin-top: 7px; }
+  .option-button { min-height: 36px; padding: 7px 10px; font-size: 12.5px; }
+  .multi-actions { margin-top: 7px; }
+  .multi-continue { min-height: 38px; }
+  .question-textarea { min-height: 68px; max-height: 72px; }
+  .question-actions { margin-top: 9px; }
+}
+
+@media (max-height: 540px) {
+  /* Accessibility fallback for unusually short viewports. Normal phones/desktops remain no-scroll. */
+  .check-body { overflow-y: auto; }
+}
+
+/* Final modal containment fixes */
+@media (max-width: 700px) {
+  .check-body { align-items: stretch; }
+}
+#snapshot-stage.active {
+  overflow-y: auto;
+  max-height: 100%;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--rose-soft) transparent;
+}

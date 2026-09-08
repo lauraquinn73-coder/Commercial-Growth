@@ -119,7 +119,9 @@ const questions = [
   {
     id: 'challenge',
     title: 'What feels like the biggest commercial question right now?',
-    type: 'choice',
+    help: 'Choose up to 3 if more than one feels relevant.',
+    type: 'multi',
+    max: 3,
     options: [
       ['acquisition', 'We need more of the right enquiries'],
       ['conversion', 'We get interest, but conversion could be stronger'],
@@ -215,7 +217,6 @@ const questions = [
 
 const modal = document.getElementById('growth-check');
 const form = document.getElementById('diagnostic-form');
-const intro = modal?.querySelector('[data-stage="intro"]');
 const snapshotStage = document.getElementById('snapshot-stage');
 const progress = document.getElementById('check-progress');
 const stepLabel = document.getElementById('check-step-label');
@@ -232,7 +233,16 @@ function openCheck() {
   modal.classList.add('open');
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('check-open');
-  document.getElementById('check-close')?.focus();
+
+  if (questionIndex === -1 && !snapshotStage.classList.contains('active')) {
+    questionIndex = 0;
+    renderQuestion();
+    backButton.hidden = true;
+    trackEvent('cg_check_started');
+  } else if (questionIndex > 0) {
+    backButton.hidden = false;
+  }
+
   trackEvent('cg_check_opened', { source: 'site_cta' });
 }
 function closeCheck() {
@@ -249,27 +259,13 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal?.c
 
 if (window.location.hash === '#check') openCheck();
 
-function startCheck() {
-  intro.classList.remove('active');
-  questionIndex = 0;
-  renderQuestion();
-  backButton.hidden = false;
-  trackEvent('cg_check_started');
-}
-document.getElementById('check-start')?.addEventListener('click', startCheck);
 backButton?.addEventListener('click', () => {
   if (snapshotStage.classList.contains('active')) return;
   if (questionIndex > 0) {
     questionIndex -= 1;
     renderQuestion();
-  } else {
-    form.innerHTML = '';
-    questionIndex = -1;
-    intro.classList.add('active');
-    backButton.hidden = true;
-    progress.style.width = '0%';
-    stepLabel.textContent = '';
   }
+  backButton.hidden = questionIndex <= 0;
 });
 
 function updateProgress() {
@@ -280,14 +276,17 @@ function updateProgress() {
 
 function renderQuestion() {
   snapshotStage.classList.remove('active');
-  form.style.display = 'block';
+  form.style.display = 'grid';
   const q = questions[questionIndex];
   updateProgress();
+  backButton.hidden = questionIndex <= 0;
   form.innerHTML = '';
+  const checkBody = document.getElementById('check-body');
+  if (checkBody) checkBody.scrollTop = 0;
 
   const card = document.createElement('div');
   card.className = 'question-card';
-  card.innerHTML = `<p class="question-kicker">Question ${questionIndex + 1}</p><h2>${q.title}</h2>${q.help ? `<p class="question-help">${q.help}</p>` : ''}`;
+  card.innerHTML = `<div class="question-copy"><p class="question-kicker">Question ${questionIndex + 1}</p><h2>${q.title}</h2>${q.help ? `<p class="question-help">${q.help}</p>` : ''}</div>`;
 
   if (q.type === 'choice') {
     const grid = document.createElement('div');
@@ -297,16 +296,89 @@ function renderQuestion() {
       btn.type = 'button';
       btn.className = `option-button${answers[q.id] === value ? ' selected' : ''}`;
       btn.textContent = label;
+      btn.setAttribute('aria-pressed', answers[q.id] === value ? 'true' : 'false');
       btn.addEventListener('click', () => {
         answers[q.id] = value;
         saveDraft();
-        grid.querySelectorAll('.option-button').forEach((b) => b.classList.remove('selected'));
+        grid.querySelectorAll('.option-button').forEach((b) => {
+          b.classList.remove('selected');
+          b.setAttribute('aria-pressed', 'false');
+        });
         btn.classList.add('selected');
-        window.setTimeout(nextQuestion, 160);
+        btn.setAttribute('aria-pressed', 'true');
+        window.setTimeout(nextQuestion, 140);
       });
       grid.appendChild(btn);
     });
     card.appendChild(grid);
+  } else if (q.type === 'multi') {
+    const selected = Array.isArray(answers[q.id]) ? [...answers[q.id]] : [];
+    answers[q.id] = selected;
+
+    const grid = document.createElement('div');
+    grid.className = 'option-grid multi-option-grid';
+
+    const actions = document.createElement('div');
+    actions.className = 'multi-actions';
+    const count = document.createElement('span');
+    count.className = 'selection-count';
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.className = 'button primary multi-continue';
+    next.textContent = 'Continue';
+
+    const refreshMultiState = () => {
+      const values = answers[q.id] || [];
+      const atMax = values.length >= (q.max || 3);
+      count.textContent = `${values.length} selected · up to ${q.max || 3}`;
+      next.disabled = values.length === 0;
+      grid.querySelectorAll('.option-button').forEach((button) => {
+        const isSelected = values.includes(button.dataset.value);
+        button.classList.toggle('selected', isSelected);
+        button.setAttribute('aria-pressed', isSelected ? 'true' : 'false');
+        button.disabled = atMax && !isSelected;
+      });
+    };
+
+    q.options.forEach(([value, label]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset.value = value;
+      btn.className = 'option-button';
+      btn.textContent = label;
+      btn.addEventListener('click', () => {
+        let values = answers[q.id] || [];
+        const existingIndex = values.indexOf(value);
+
+        // “I cannot pinpoint it” is intentionally exclusive; selecting a specific
+        // commercial issue removes it, and selecting it clears the specific issues.
+        if (value === 'unsure') {
+          values = existingIndex >= 0 ? [] : ['unsure'];
+        } else {
+          values = values.filter((item) => item !== 'unsure');
+          const updatedIndex = values.indexOf(value);
+          if (updatedIndex >= 0) {
+            values.splice(updatedIndex, 1);
+          } else if (values.length < (q.max || 3)) {
+            values.push(value);
+          }
+        }
+
+        answers[q.id] = values;
+        saveDraft();
+        refreshMultiState();
+      });
+      grid.appendChild(btn);
+    });
+
+    next.addEventListener('click', () => {
+      if ((answers[q.id] || []).length > 0) nextQuestion();
+    });
+    actions.appendChild(count);
+    actions.appendChild(next);
+    card.appendChild(grid);
+    card.appendChild(actions);
+    refreshMultiState();
   } else {
     const input = document.createElement(q.type === 'textarea' ? 'textarea' : 'input');
     input.className = q.type === 'textarea' ? 'question-textarea' : 'question-input';
@@ -334,10 +406,11 @@ function renderQuestion() {
       }
     });
     card.appendChild(actions);
-    window.setTimeout(() => input.focus(), 50);
   }
 
+  card.tabIndex = -1;
   form.appendChild(card);
+  window.setTimeout(() => card.focus({ preventScroll: true }), 40);
 }
 
 function validateTextQuestion(q, input) {
@@ -404,14 +477,18 @@ function renderConsent() {
 
 function scoreSnapshot() {
   const score = { acquisition: 0, conversion: 0, follow_up: 0, retention: 0, measurement: 0, journey: 0, offer: 0 };
-  const c = answers.challenge;
-  if (c === 'acquisition') score.acquisition += 5;
-  if (c === 'conversion') score.conversion += 5;
-  if (c === 'follow_up') score.follow_up += 5;
-  if (c === 'retention') score.retention += 5;
-  if (c === 'journey') score.journey += 5;
-  if (c === 'direction') { score.offer += 3; score.measurement += 2; }
-  if (c === 'unsure') { score.measurement += 3; score.journey += 2; }
+  const challenges = Array.isArray(answers.challenge)
+    ? answers.challenge
+    : (answers.challenge ? [answers.challenge] : []);
+  challenges.forEach((c) => {
+    if (c === 'acquisition') score.acquisition += 5;
+    if (c === 'conversion') score.conversion += 5;
+    if (c === 'follow_up') score.follow_up += 5;
+    if (c === 'retention') score.retention += 5;
+    if (c === 'journey') score.journey += 5;
+    if (c === 'direction') { score.offer += 3; score.measurement += 2; }
+    if (c === 'unsure') { score.measurement += 3; score.journey += 2; }
+  });
 
   if (answers.conversion_visibility === 'no') { score.measurement += 4; score.conversion += 2; }
   if (answers.conversion_visibility === 'roughly') { score.measurement += 2; score.conversion += 1; }
@@ -423,7 +500,7 @@ function scoreSnapshot() {
   if (answers.repeat_potential === 'some') score.retention += 2;
   if (answers.repeat_potential === 'unknown') { score.retention += 1; score.measurement += 1; }
   if (answers.monthly_enquiries === '100+' || answers.monthly_enquiries === '31-100') { score.conversion += 2; score.measurement += 1; }
-  if (answers.monthly_enquiries === '0-10' && answers.challenge !== 'acquisition') score.acquisition += 2;
+  if (answers.monthly_enquiries === '0-10' && !challenges.includes('acquisition')) score.acquisition += 2;
 
   return Object.entries(score).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([key]) => key);
 }
@@ -482,7 +559,7 @@ async function submitLead() {
     if (!response.ok) throw new Error('Submission failed');
     leadSubmitted = true;
     trackEvent('cg_diagnostic_completed', {
-      challenge: answers.challenge,
+      challenge: Array.isArray(answers.challenge) ? answers.challenge.join('|') : answers.challenge,
       monthly_enquiries: answers.monthly_enquiries,
       support_interest: answers.support_interest,
       timeline: answers.timeline,
@@ -512,6 +589,10 @@ function showSnapshot(priorities) {
     ? '<p class="price-copy"><strong>You also told me you would be open to implementation support.</strong> If the audit uncovers something worth acting on, ongoing consultancy can be scoped from there.</p>'
     : '';
 
+  const questionSubject = `Commercial Growth question · ${leadId}`;
+  const questionBody = `Hi Laura,\n\nI’ve completed the Commercial Growth Check and I have a question before deciding on the Audit.\n\n`;
+  const gmailQuestionUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(CONFIG.contactEmail || 'lauraqbusiness@gmail.com')}&su=${encodeURIComponent(questionSubject)}&body=${encodeURIComponent(questionBody)}`;
+
   snapshotStage.innerHTML = `
     <div class="snapshot-top">
       <p class="eyebrow">YOUR COMMERCIAL GROWTH SNAPSHOT</p>
@@ -530,7 +611,7 @@ function showSnapshot(priorities) {
       ${implementationNote}
       <div class="snapshot-actions">
         <button class="button primary" id="request-audit" type="button">Request my Audit</button>
-        <a class="button secondary" id="ask-question" href="mailto:${CONFIG.contactEmail || 'lauraqbusiness@gmail.com'}?subject=${encodeURIComponent(`Commercial Growth question · ${leadId}`)}">I have a question first</a>
+        <a class="button secondary" id="ask-question" href="${gmailQuestionUrl}" target="_blank" rel="noopener noreferrer">I have a question first</a>
       </div>
       <div id="intent-confirmation"></div>
     </div>`;
