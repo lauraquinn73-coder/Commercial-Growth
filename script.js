@@ -119,7 +119,7 @@ const questions = [
   {
     id: 'challenge',
     title: 'What feels like the biggest commercial question right now?',
-    help: 'Choose up to 3 if more than one feels relevant.',
+    help: 'Select up to 3. Choose every area that genuinely feels relevant.',
     type: 'multi',
     max: 3,
     options: [
@@ -330,7 +330,7 @@ function renderQuestion() {
     const refreshMultiState = () => {
       const values = answers[q.id] || [];
       const atMax = values.length >= (q.max || 3);
-      count.textContent = `${values.length} selected · up to ${q.max || 3}`;
+      count.textContent = `${values.length} of ${q.max || 3} selected`;
       next.disabled = values.length === 0;
       grid.querySelectorAll('.option-button').forEach((button) => {
         const isSelected = values.includes(button.dataset.value);

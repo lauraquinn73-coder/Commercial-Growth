@@ -108,3 +108,7 @@ Before sharing publicly:
 - Audit and Consultancy are stacked as distinct sections so the two navigation links land at different positions.
 - “I have a question first” opens a Gmail compose window addressed to `lauraqbusiness@gmail.com`.
 - The About section has been rewritten and the line “Where is the opportunity?” is visually emphasised.
+
+
+## IMPORTANT deployment note
+Upload the individual files in this folder to the ROOT of the Commercial Growth GitHub repository. This build uses versioned CSS/JS URLs to force browsers to load the newest diagnostic behaviour instead of a cached copy.
