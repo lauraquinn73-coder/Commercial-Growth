@@ -115,7 +115,7 @@ Upload the individual files in this folder to the ROOT of the Commercial Growth 
 
 
 ## v3 contact conversion enhancements
-- Added an **Email me** CTA beside the Instagram CTA in the final contact section.
+- Added an **Email me** CTA beside the Instagram CTA in the final contact section. It now opens a Gmail compose window with `lauraqbusiness@gmail.com` already populated as the recipient, matching the “I have a question first” behaviour.
 - Added a lower-friction Instagram CTA treatment so the Growth Check remains visually primary.
 - Added a direct Email link in the footer as a fallback contact route.
 - Added GA4-ready click events for email and Instagram contact intent (`cg_email_clicked`, `cg_instagram_clicked`).
