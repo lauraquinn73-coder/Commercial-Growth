@@ -703,3 +703,154 @@ body.check-open { overflow: hidden; }
   .brand-mark { flex-basis: 34px; width: 34px; height: 34px; }
   .nav-cta { padding-inline: 11px; font-size: 12px; }
 }
+
+
+/* Analytics preference control */
+.footer-privacy-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.footer-privacy-button:focus-visible {
+  outline: 2px solid var(--rose-dark);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
+
+/* V9 premium diagnostic analysis + result treatment */
+.analysis-stage {
+  max-width: 720px;
+  margin: auto;
+  text-align: center;
+  padding: 18px 0;
+}
+.analysis-stage h2 {
+  font-size: clamp(42px, 5.4vw, 68px);
+  margin: 10px auto 14px;
+  max-width: 700px;
+}
+.analysis-lead {
+  color: var(--muted);
+  max-width: 650px;
+  margin: 0 auto 28px;
+  font-size: 16px;
+}
+.analysis-orbit {
+  width: 68px;
+  height: 68px;
+  margin: 2px auto 18px;
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+}
+.analysis-orbit::before {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border: 1px solid var(--rose-soft);
+  border-radius: 50%;
+}
+.analysis-orbit span {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--rose-dark);
+  top: 29px;
+  left: 29px;
+  transform-origin: 5px 5px;
+}
+.analysis-orbit span:nth-child(1) { animation: cgOrbit1 1.8s linear infinite; }
+.analysis-orbit span:nth-child(2) { animation: cgOrbit2 2.3s linear infinite reverse; opacity: .65; }
+.analysis-orbit span:nth-child(3) { animation: cgPulse 1.3s ease-in-out infinite; }
+@keyframes cgOrbit1 { from { transform: rotate(0deg) translateX(27px); } to { transform: rotate(360deg) translateX(27px); } }
+@keyframes cgOrbit2 { from { transform: rotate(0deg) translateX(19px); } to { transform: rotate(360deg) translateX(19px); } }
+@keyframes cgPulse { 0%,100% { transform: scale(.75); opacity:.55; } 50% { transform: scale(1.35); opacity:1; } }
+.analysis-list {
+  max-width: 570px;
+  margin: 0 auto;
+  display: grid;
+  gap: 8px;
+  text-align: left;
+}
+.analysis-item {
+  display: grid;
+  grid-template-columns: 36px 1fr;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,.45);
+  padding: 11px 14px;
+  border-radius: 12px;
+  opacity: .45;
+  transition: opacity .25s ease, border-color .25s ease, background .25s ease;
+}
+.analysis-item span { font-size: 10px; color: var(--rose-dark); font-weight: 700; letter-spacing: .12em; }
+.analysis-item p { margin: 0; font-size: 13px; }
+.analysis-item.active { opacity: 1; border-color: var(--rose-soft); background: var(--white); }
+.analysis-item.done { opacity: .72; }
+.analysis-item.done p::after { content: '  ✓'; color: var(--rose-dark); font-weight: 700; }
+.analysis-note { margin: 18px 0 0; color: var(--muted); font-size: 12px; }
+
+.snapshot-intro { color: var(--muted); max-width: 700px; margin-top: -4px; }
+.snapshot-rationale {
+  margin: 18px 0 12px;
+  padding: 16px 18px;
+  border-left: 3px solid var(--rose-dark);
+  background: rgba(201,137,131,.08);
+  max-width: 760px;
+}
+.snapshot-rationale span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--rose-dark);
+  font-size: 10px;
+  letter-spacing: .13em;
+  font-weight: 700;
+}
+.snapshot-rationale p { margin: 0; font-size: 14px; line-height: 1.55; }
+.audit-value-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin: 18px 0;
+}
+.audit-value-strip span {
+  border: 1px solid var(--line);
+  background: var(--white);
+  padding: 12px 13px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.audit-value-strip strong { color: var(--charcoal); display:block; margin-bottom:2px; }
+.request-note {
+  color: var(--muted);
+  font-size: 12px;
+  max-width: 690px;
+  margin-top: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .analysis-orbit span { animation: none !important; }
+}
+
+@media (max-width: 640px) {
+  .analysis-stage { padding: 4px 0 10px; }
+  .analysis-stage h2 { font-size: clamp(36px, 10.5vw, 48px); }
+  .analysis-lead { font-size: 14px; margin-bottom: 18px; }
+  .analysis-orbit { width: 56px; height: 56px; margin-bottom: 12px; }
+  .analysis-orbit::before { inset: 9px; }
+  .analysis-orbit span { top: 23px; left: 23px; }
+  @keyframes cgOrbit1 { from { transform: rotate(0deg) translateX(22px); } to { transform: rotate(360deg) translateX(22px); } }
+  @keyframes cgOrbit2 { from { transform: rotate(0deg) translateX(16px); } to { transform: rotate(360deg) translateX(16px); } }
+  .analysis-item { padding: 9px 11px; }
+  .audit-value-strip { grid-template-columns: 1fr; gap: 6px; }
+  .snapshot-rationale { padding: 13px 14px; }
+}

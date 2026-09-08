@@ -1,3 +1,4 @@
+// Commercial Growth V9 - premium diagnostic + acquisition funnel
 const CONFIG = window.CG_CONFIG || {};
 const YEAR = document.getElementById('year');
 if (YEAR) YEAR.textContent = new Date().getFullYear();
@@ -37,40 +38,81 @@ function createLeadId() {
 const leadId = sessionStorage.getItem('cg_lead_id') || createLeadId();
 sessionStorage.setItem('cg_lead_id', leadId);
 
-// Consent-aware GA4. PII is never sent to analytics.
+function escapeHTML(value = '') {
+  return String(value).replace(/[&<>'"]/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+  })[char]);
+}
+
+let priceViewed = false;
+let auditRequested = false;
+
+// Consent-aware GA4. Google Analytics is completely disabled until a valid
+// Measurement ID exists AND the visitor explicitly opts in. No name, email,
+// business name, URL supplied in the Check, free-text answer or internal lead ID
+// is sent to GA4.
 let analyticsReady = false;
+const analyticsId = (CONFIG.gaMeasurementId || '').trim();
+const analyticsConfigured = /^G-[A-Z0-9]+$/i.test(analyticsId);
+
 function loadAnalytics() {
-  const id = (CONFIG.gaMeasurementId || '').trim();
-  if (!id || analyticsReady) return;
+  if (!analyticsConfigured || analyticsReady) return;
   window.dataLayer = window.dataLayer || [];
-  window.gtag = function(){ dataLayer.push(arguments); };
-  gtag('js', new Date());
-  gtag('config', id, { send_page_view: true });
+  window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };
+  window.gtag('js', new Date());
+  window.gtag('config', analyticsId, {
+    send_page_view: true,
+    allow_google_signals: false,
+    allow_ad_personalization_signals: false
+  });
   const script = document.createElement('script');
   script.async = true;
-  script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(id)}`;
+  script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(analyticsId)}`;
   document.head.appendChild(script);
   analyticsReady = true;
 }
+
 function trackEvent(name, details = {}) {
   if (!analyticsReady || typeof window.gtag !== 'function') return;
-  const safe = { ...details, lead_id: leadId };
-  // Do not ever add name, email, business name or free-text answers here.
-  gtag('event', name, safe);
+  // Event details must stay categorical/aggregate. Never add PII or free-text here.
+  window.gtag('event', name, details);
 }
 
 const cookieBanner = document.getElementById('cookie-banner');
-const consent = localStorage.getItem('cg_analytics_consent');
-if (!consent && cookieBanner) cookieBanner.hidden = false;
-if (consent === 'yes') loadAnalytics();
+const privacyChoicesButton = document.getElementById('privacy-choices');
+const storedConsent = localStorage.getItem('cg_analytics_consent');
+
+function showPrivacyChoices() {
+  if (!cookieBanner || !analyticsConfigured) return;
+  cookieBanner.hidden = false;
+}
+function hidePrivacyChoices() {
+  if (cookieBanner) cookieBanner.hidden = true;
+}
+
+// Do not show a meaningless analytics banner before GA4 has actually been connected.
+if (analyticsConfigured) {
+  if (storedConsent === 'yes') loadAnalytics();
+  if (!storedConsent) showPrivacyChoices();
+} else {
+  hidePrivacyChoices();
+}
+
+privacyChoicesButton?.addEventListener('click', () => {
+  if (!analyticsConfigured) return;
+  showPrivacyChoices();
+});
+
 document.getElementById('cookie-allow')?.addEventListener('click', () => {
   localStorage.setItem('cg_analytics_consent', 'yes');
-  cookieBanner.hidden = true;
+  hidePrivacyChoices();
   loadAnalytics();
+  trackEvent('cg_analytics_consent', { choice: 'accepted' });
 });
+
 document.getElementById('cookie-essential')?.addEventListener('click', () => {
   localStorage.setItem('cg_analytics_consent', 'no');
-  cookieBanner.hidden = true;
+  hidePrivacyChoices();
 });
 
 // Track lower-friction contact intent without collecting any personal data in analytics.
@@ -260,7 +302,11 @@ function closeCheck() {
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('check-open');
-  if (questionIndex >= 0 && !leadSubmitted) trackEvent('cg_check_closed', { question_number: questionIndex + 1 });
+  if (questionIndex >= 0 && !leadSubmitted) {
+    trackEvent('cg_check_closed', { question_number: questionIndex + 1 });
+  } else if (leadSubmitted && priceViewed && !auditRequested) {
+    trackEvent('cg_price_abandoned', { stage: 'price_viewed_no_request' });
+  }
 }
 
 document.querySelectorAll('.js-open-check').forEach((button) => button.addEventListener('click', openCheck));
@@ -289,6 +335,7 @@ function renderQuestion() {
   snapshotStage.classList.remove('active');
   form.style.display = 'grid';
   const q = questions[questionIndex];
+  trackEvent('cg_check_question_viewed', { question_number: questionIndex + 1, question_id: q.id });
   updateProgress();
   backButton.hidden = questionIndex <= 0;
   form.innerHTML = '';
@@ -516,6 +563,48 @@ function scoreSnapshot() {
   return Object.entries(score).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([key]) => key);
 }
 
+function scoreLeadFit() {
+  let points = 0;
+  const challenges = Array.isArray(answers.challenge) ? answers.challenge : (answers.challenge ? [answers.challenge] : []);
+  if (['31-100', '100+'].includes(answers.monthly_enquiries)) points += 2;
+  else if (answers.monthly_enquiries === '11-30') points += 1;
+  if (['no', 'roughly'].includes(answers.conversion_visibility)) points += 1;
+  if (['sometimes', 'rarely', 'never', 'unknown'].includes(answers.follow_up)) points += 1;
+  if (['high', 'some'].includes(answers.repeat_potential)) points += 1;
+  if (answers.support_interest === 'implementation') points += 2;
+  if (answers.timeline === 'now') points += 2;
+  else if (answers.timeline === 'month') points += 1;
+  if (challenges.length >= 2) points += 1;
+  return points >= 6 ? 'A - high intent / strong fit' : points >= 3 ? 'B - warm / plausible fit' : 'C - early / exploratory';
+}
+
+function buildSnapshotReason(priorities) {
+  const snippets = [];
+  if (answers.monthly_enquiries === '31-100' || answers.monthly_enquiries === '100+') {
+    snippets.push('you already have meaningful enquiry volume');
+  } else if (answers.monthly_enquiries === '11-30') {
+    snippets.push('there is enough enquiry activity to start looking for patterns');
+  }
+  if (answers.conversion_visibility === 'no') snippets.push('conversion is not currently being measured clearly');
+  if (answers.conversion_visibility === 'roughly') snippets.push('conversion visibility is still approximate');
+  if (answers.follow_up === 'never' || answers.follow_up === 'rarely') snippets.push('follow-up appears to be a potential recovery point');
+  if (answers.follow_up === 'sometimes') snippets.push('follow-up is not yet fully consistent');
+  if (answers.repeat_potential === 'high') snippets.push('there is strong repeat or additional-sale potential');
+  if (answers.repeat_potential === 'some') snippets.push('there is some repeat-revenue potential worth testing');
+  if (answers.support_interest === 'implementation') snippets.push('you are open to acting on what the audit finds');
+
+  if (!snippets.length) {
+    const labels = priorities.slice(0,2).map((key) => areaCopy[key][0].toLowerCase());
+    return `Your answers point me first toward ${labels.join(' and ')}. The purpose of the Audit would be to establish what is actually happening before recommending a fix.`;
+  }
+
+  const selected = snippets.slice(0, 3);
+  const sentence = selected.length === 1
+    ? selected[0]
+    : `${selected.slice(0,-1).join(', ')} and ${selected[selected.length-1]}`;
+  return `These areas surfaced because ${sentence}. That combination is where I would start testing for commercial leakage or missed opportunity.`;
+}
+
 const areaCopy = {
   acquisition: ['ACQUISITION', 'Lead quality & acquisition efficiency'],
   conversion: ['CONVERSION', 'Enquiry-to-sale conversion'],
@@ -553,6 +642,7 @@ async function submitLead() {
     ...answers,
     lead_id: leadId,
     stage: 'diagnostic_complete_price_reveal',
+    lead_priority: scoreLeadFit(),
     priority_1: areaCopy[priorities[0]][1],
     priority_2: areaCopy[priorities[1]][1],
     priority_3: areaCopy[priorities[2]][1],
@@ -576,13 +666,43 @@ async function submitLead() {
       timeline: answers.timeline,
       heard_from: answers.heard_from
     });
-    showSnapshot(priorities);
+    showAnalysis(priorities);
   } catch (error) {
     button.disabled = false;
     button.textContent = 'Try again';
+    trackEvent('cg_diagnostic_submit_failed', { question_count: questions.length });
     status.textContent = 'Something did not send properly. Please try again, or contact Laura directly if it keeps happening.';
     status.classList.add('error');
   }
+}
+
+function showAnalysis(priorities) {
+  form.style.display = 'none';
+  backButton.hidden = true;
+  stepLabel.textContent = 'Analysing your responses';
+  progress.style.width = '100%';
+  snapshotStage.classList.add('active');
+  trackEvent('cg_analysis_started', { stage: 'post_diagnostic' });
+
+  const safeName = escapeHTML(answers.name || '');
+  snapshotStage.innerHTML = `
+    <div class="analysis-stage" role="status" aria-live="polite">
+      <p class="eyebrow">COMMERCIAL GROWTH CHECK</p>
+      <div class="analysis-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
+      <h2>Analysing your responses${safeName ? `, ${safeName}` : ''}…</h2>
+      <p class="analysis-lead">I’m comparing the signals across demand, conversion, follow-up, repeat revenue and the customer journey to prioritise where I would look first.</p>
+      <div class="analysis-list" aria-hidden="true">
+        <div class="analysis-item active"><span>01</span><p>Reviewing demand & conversion signals</p></div>
+        <div class="analysis-item"><span>02</span><p>Checking follow-up & retention potential</p></div>
+        <div class="analysis-item"><span>03</span><p>Prioritising the strongest commercial questions</p></div>
+      </div>
+      <p class="analysis-note">This is based on what you told me, not a generic scorecard.</p>
+    </div>`;
+
+  const items = [...snapshotStage.querySelectorAll('.analysis-item')];
+  window.setTimeout(() => { items[0]?.classList.add('done'); items[1]?.classList.add('active'); }, 650);
+  window.setTimeout(() => { items[1]?.classList.add('done'); items[2]?.classList.add('active'); }, 1300);
+  window.setTimeout(() => { items[2]?.classList.add('done'); showSnapshot(priorities); }, 2100);
 }
 
 function showSnapshot(priorities) {
@@ -596,6 +716,7 @@ function showSnapshot(priorities) {
     return `<article class="snapshot-card"><span>${label}</span><h3>${title}</h3></article>`;
   }).join('');
 
+  const tailoredReason = buildSnapshotReason(priorities);
   const implementationNote = answers.support_interest === 'implementation'
     ? '<p class="price-copy"><strong>You also told me you would be open to implementation support.</strong> If the audit uncovers something worth acting on, ongoing consultancy can be scoped from there.</p>'
     : '';
@@ -608,19 +729,27 @@ function showSnapshot(priorities) {
   snapshotStage.innerHTML = `
     <div class="snapshot-top">
       <p class="eyebrow">YOUR COMMERCIAL GROWTH SNAPSHOT</p>
-      <h2>${answers.name ? `${answers.name}, ` : ''}these are the areas I would investigate first.</h2>
-      <p class="snapshot-disclaimer">This is not a diagnosis and I am not claiming anything is wrong with the business from a short form. Your answers simply tell me where the strongest commercial questions are likely to be.</p>
+      <h2>${answers.name ? `${escapeHTML(answers.name)}, ` : ''}here’s where I would start.</h2>
+      <p class="snapshot-intro">Your answers have been compared across the commercial journey to surface the areas most worth investigating first.</p>
+      <div class="snapshot-rationale"><span>WHY THESE AREAS SURFACED</span><p>${escapeHTML(tailoredReason)}</p></div>
+      <p class="snapshot-disclaimer">This is an initial commercial snapshot, not a diagnosis. I would validate the causes against the real customer journey, process and performance data before recommending changes.</p>
     </div>
     <div class="snapshot-grid">${cards}</div>
     <div class="price-reveal">
       <p class="small-label">RECOMMENDED NEXT STEP</p>
       <h3>Commercial Growth Audit</h3>
       <p class="price-copy">A deeper review of the customer journey, sales process, conversion, follow-up, retention, offers and commercial performance signals, followed by prioritised findings and a practical action plan.</p>
+      <div class="audit-value-strip">
+        <span><strong>Diagnose</strong> what is actually happening</span>
+        <span><strong>Prioritise</strong> what is worth fixing first</span>
+        <span><strong>Implement</strong> support is available if needed</span>
+      </div>
       <div class="price-row">
         <span class="price-current">${CONFIG.auditLaunchPrice || '€349'}</span>
         <span class="price-standard">Founding client rate · standard rate <s>${CONFIG.auditStandardPrice || '€495'}</s></span>
       </div>
       ${implementationNote}
+      <p class="request-note">Requesting an Audit does not take payment here. It lets Laura know you want to move forward so fit, scope and next steps can be confirmed first.</p>
       <div class="snapshot-actions">
         <button class="button primary" id="request-audit" type="button">Request my Audit</button>
         <a class="button secondary" id="ask-question" href="${questionMailtoUrl}">I have a question first</a>
@@ -628,6 +757,8 @@ function showSnapshot(priorities) {
       <div id="intent-confirmation"></div>
     </div>`;
   snapshotStage.classList.add('active');
+  priceViewed = true;
+  trackEvent('cg_snapshot_viewed', { priority_count: priorities.length });
   trackEvent('cg_price_viewed', { audit_price: (CONFIG.auditLaunchPrice || '349').replace(/\D/g, '') });
 
   document.getElementById('request-audit').addEventListener('click', requestAudit);
@@ -649,6 +780,7 @@ async function requestAudit() {
         body: JSON.stringify({
           lead_id: leadId,
           stage: 'audit_requested',
+          lead_priority: scoreLeadFit(),
           name: answers.name,
           business: answers.business,
           email: answers.email,
@@ -659,11 +791,13 @@ async function requestAudit() {
       });
       if (!response.ok) throw new Error('Intent failed');
     }
+    auditRequested = true;
     trackEvent('cg_audit_requested', { support_interest: answers.support_interest, timeline: answers.timeline });
     box.className = 'intent-confirmation';
     box.innerHTML = '<strong>Your Audit request is in.</strong><span>Laura already has your Commercial Growth Check answers and will come back to you about the best next step.</span>';
     button.textContent = 'Audit requested ✓';
   } catch (error) {
+    trackEvent('cg_audit_request_failed');
     button.disabled = false;
     button.textContent = 'Request my Audit';
     box.className = 'intent-confirmation';

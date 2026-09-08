@@ -27,24 +27,27 @@ This site is designed to use a secure form endpoint. Formspree is the easiest op
 
 Until this is done, the Commercial Growth Check deliberately will **not reveal pricing**, because it cannot confirm that the warm lead was safely captured first.
 
-## 2. Optional: connect Google Analytics 4
-Create a GA4 web data stream for `https://commercialgrowth.ie` and copy the Measurement ID, e.g. `G-XXXXXXXXXX`.
+## 2. Connect Google Analytics 4 (free standard GA4)
+GA4 is connected to `https://commercialgrowth.ie` using Measurement ID `G-5PNH8XMW8N`.
 
-Paste that into `gaMeasurementId` in `config.js`.
-
-Analytics only loads after the visitor chooses **Allow analytics**. Name, email, business name and free-text answers are never intentionally passed into GA4 events.
+The analytics banner only appears after a real GA4 Measurement ID is configured. GA4 loads only after the visitor chooses **Allow analytics**. Name, email, business name, business URL, free-text answers and the internal Formspree lead reference are not sent to GA4. A footer **Privacy choices** control lets visitors reopen the consent banner.
 
 ### Funnel events included
 - `cg_check_opened`
 - `cg_check_started`
+- `cg_check_question_viewed` (question number + non-sensitive question ID only)
 - `cg_contact_step_completed`
 - `cg_diagnostic_completed`
 - `cg_price_viewed`
 - `cg_question_clicked`
 - `cg_audit_requested`
+- `cg_email_clicked`
+- `cg_instagram_clicked`
 - `cg_check_closed`
+- `cg_diagnostic_submit_failed`
+- `cg_audit_request_failed`
 
-The random `lead_id` can be used to connect an anonymous analytics journey with the lead reference in the form submission without using their email address as an analytics identifier.
+Use GA4 Funnel Exploration to compare: visitor → Check started → contact step → diagnostic completed → price viewed → Audit requested. UTM parameters provide acquisition attribution, while Formspree remains the source of truth for identifiable warm leads.
 
 ## 3. Attribution
 The site automatically attaches these to lead submissions when present:
@@ -121,3 +124,14 @@ Upload the individual files in this folder to the ROOT of the Commercial Growth 
 - Added GA4-ready click events for email and Instagram contact intent (`cg_email_clicked`, `cg_instagram_clicked`).
 - Added short contact-choice microcopy to reduce hesitation for visitors who are not ready to start the Check.
 - Cache-busted CSS/JS references to force the updated UI to load after GitHub deployment.
+
+
+## V9 final launch additions
+- Premium post-diagnostic “Analysing your responses” transition
+- Three-step analysis animation before the result appears
+- Tailored “why these areas surfaced” copy based on each lead’s answers
+- Internal A/B/C lead-priority scoring sent to Formspree (never shown to the visitor or GA4)
+- Price-abandonment analytics event when a completed lead views pricing but closes without requesting an Audit
+- Separate snapshot-viewed and analysis-started GA4 events
+- Clearer audit value framing and no-payment-at-request reassurance
+- Existing V7/V8 consent-aware GA4, Formspree, UTM attribution and diagnostic tracking preserved
