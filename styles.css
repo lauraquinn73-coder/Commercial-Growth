@@ -123,6 +123,8 @@ h1 em { display: block; font-style: italic; color: var(--rose-dark); }
 .primary:hover { background: #171616; }
 .secondary { border: 1px solid var(--charcoal); background: transparent; }
 .secondary:hover { background: rgba(45,43,43,.04); }
+.soft { border: 1px solid rgba(174,111,105,.38); background: rgba(201,137,131,.10); color: var(--charcoal); }
+.soft:hover { background: rgba(201,137,131,.18); border-color: rgba(174,111,105,.62); }
 .micro-proof { margin: 18px 0 0; color: var(--muted); font-size: 13px; }
 
 .hero-card {
@@ -218,7 +220,8 @@ h1 em { display: block; font-style: italic; color: var(--rose-dark); }
 .contact h2 { font-size: clamp(44px, 6vw, 78px); max-width: 980px; margin: 0 auto 20px; letter-spacing: -.02em; }
 .contact > p:not(.eyebrow):not(.contact-note) { max-width: 720px; margin: 0 auto 30px; color: var(--muted); font-size: 18px; }
 .contact-actions { justify-content: center; }
-.contact-note { font-size: 13px; color: var(--muted); margin-top: 22px; }
+.contact-choice { max-width: 680px; margin: 18px auto 0 !important; font-size: 14px !important; color: var(--muted); }
+.contact-note { font-size: 13px; color: var(--muted); margin-top: 10px; }
 
 footer { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 30px 5vw; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .footer-brand { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--charcoal); }
@@ -254,6 +257,7 @@ footer { display: flex; justify-content: space-between; align-items: center; gap
   h1 em { display: inline; }
   .hero-card { padding: 24px; }
   .button { width: 100%; }
+  .contact-actions { width: min(100%, 520px); margin-inline: auto; }
   .section { padding: 16vw 6vw; }
   .statement, .quote-band, .contact { padding: 18vw 6vw; }
   .offer-grid, .leak-grid { grid-template-columns: 1fr; }

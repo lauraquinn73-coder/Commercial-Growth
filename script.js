@@ -73,6 +73,17 @@ document.getElementById('cookie-essential')?.addEventListener('click', () => {
   cookieBanner.hidden = true;
 });
 
+// Track lower-friction contact intent without collecting any personal data in analytics.
+document.getElementById('contact-email')?.addEventListener('click', () => {
+  trackEvent('cg_email_clicked', { placement: 'contact_section' });
+});
+document.getElementById('contact-instagram')?.addEventListener('click', () => {
+  trackEvent('cg_instagram_clicked', { placement: 'contact_section' });
+});
+document.getElementById('footer-email')?.addEventListener('click', () => {
+  trackEvent('cg_email_clicked', { placement: 'footer' });
+});
+
 const questions = [
   {
     id: 'name',

@@ -112,3 +112,12 @@ Before sharing publicly:
 
 ## IMPORTANT deployment note
 Upload the individual files in this folder to the ROOT of the Commercial Growth GitHub repository. This build uses versioned CSS/JS URLs to force browsers to load the newest diagnostic behaviour instead of a cached copy.
+
+
+## v3 contact conversion enhancements
+- Added an **Email me** CTA beside the Instagram CTA in the final contact section.
+- Added a lower-friction Instagram CTA treatment so the Growth Check remains visually primary.
+- Added a direct Email link in the footer as a fallback contact route.
+- Added GA4-ready click events for email and Instagram contact intent (`cg_email_clicked`, `cg_instagram_clicked`).
+- Added short contact-choice microcopy to reduce hesitation for visitors who are not ready to start the Check.
+- Cache-busted CSS/JS references to force the updated UI to load after GitHub deployment.
