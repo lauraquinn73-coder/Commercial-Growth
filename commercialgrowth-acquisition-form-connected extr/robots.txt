@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://commercialgrowth.ie/sitemap.xml
