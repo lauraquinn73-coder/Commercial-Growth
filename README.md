@@ -106,7 +106,7 @@ Before sharing publicly:
 - Question screens are compacted to fit normal desktop and mobile viewports without scrolling; only very short viewports use an accessibility fallback scroll.
 - Question 6 is multi-select with a maximum of three answers. “I cannot pinpoint it” is exclusive so the final screening data stays coherent.
 - Audit and Consultancy are stacked as distinct sections so the two navigation links land at different positions.
-- “I have a question first” opens a Gmail compose window addressed to `lauraqbusiness@gmail.com`.
+- “I have a question first” opens the visitor’s configured email composer addressed to `lauraqbusiness@gmail.com`.
 - The About section has been rewritten and the line “Where is the opportunity?” is visually emphasised.
 
 
@@ -115,7 +115,7 @@ Upload the individual files in this folder to the ROOT of the Commercial Growth 
 
 
 ## v3 contact conversion enhancements
-- Added an **Email me** CTA beside the Instagram CTA in the final contact section. It now opens a Gmail compose window with `lauraqbusiness@gmail.com` already populated as the recipient, matching the “I have a question first” behaviour.
+- Added an **Email me** CTA beside the Instagram CTA in the final contact section. It now opens the visitor’s configured email composer with `lauraqbusiness@gmail.com` already populated as the recipient, matching the “I have a question first” behaviour.
 - Added a lower-friction Instagram CTA treatment so the Growth Check remains visually primary.
 - Added a direct Email link in the footer as a fallback contact route.
 - Added GA4-ready click events for email and Instagram contact intent (`cg_email_clicked`, `cg_instagram_clicked`).

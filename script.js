@@ -602,7 +602,8 @@ function showSnapshot(priorities) {
 
   const questionSubject = `Commercial Growth question · ${leadId}`;
   const questionBody = `Hi Laura,\n\nI’ve completed the Commercial Growth Check and I have a question before deciding on the Audit.\n\n`;
-  const gmailQuestionUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(CONFIG.contactEmail || 'lauraqbusiness@gmail.com')}&su=${encodeURIComponent(questionSubject)}&body=${encodeURIComponent(questionBody)}`;
+  const emailAddress = CONFIG.contactEmail || 'lauraqbusiness@gmail.com';
+  const questionMailtoUrl = `mailto:${emailAddress}?subject=${encodeURIComponent(questionSubject)}&body=${encodeURIComponent(questionBody)}`;
 
   snapshotStage.innerHTML = `
     <div class="snapshot-top">
@@ -622,7 +623,7 @@ function showSnapshot(priorities) {
       ${implementationNote}
       <div class="snapshot-actions">
         <button class="button primary" id="request-audit" type="button">Request my Audit</button>
-        <a class="button secondary" id="ask-question" href="${gmailQuestionUrl}" target="_blank" rel="noopener noreferrer">I have a question first</a>
+        <a class="button secondary" id="ask-question" href="${questionMailtoUrl}">I have a question first</a>
       </div>
       <div id="intent-confirmation"></div>
     </div>`;
