@@ -600,8 +600,8 @@ function showSnapshot(priorities) {
     ? '<p class="price-copy"><strong>You also told me you would be open to implementation support.</strong> If the audit uncovers something worth acting on, ongoing consultancy can be scoped from there.</p>'
     : '';
 
-  const questionSubject = `Commercial Growth question · ${leadId}`;
-  const questionBody = `Hi Laura,\n\nI’ve completed the Commercial Growth Check and I have a question before deciding on the Audit.\n\n`;
+  const questionSubject = 'Question about Commercial Growth';
+  const questionBody = `Hi Laura,\n\nI’ve completed the Commercial Growth Check${answers.business ? ` for ${answers.business}` : ''} and I have a question before deciding on the Audit.\n\nMy question is:\n\n\nThanks,\n${answers.name || ''}`;
   const emailAddress = CONFIG.contactEmail || 'lauraqbusiness@gmail.com';
   const questionMailtoUrl = `mailto:${emailAddress}?subject=${encodeURIComponent(questionSubject)}&body=${encodeURIComponent(questionBody)}`;
 
@@ -667,6 +667,6 @@ async function requestAudit() {
     button.disabled = false;
     button.textContent = 'Request my Audit';
     box.className = 'intent-confirmation';
-    box.innerHTML = `Something did not send properly. Please email <a href="mailto:${CONFIG.contactEmail || 'lauraqbusiness@gmail.com'}?subject=${encodeURIComponent(`Commercial Growth Audit · ${leadId}`)}">Laura directly</a>.`;
+    box.innerHTML = `Something did not send properly. Please email <a href="mailto:${CONFIG.contactEmail || 'lauraqbusiness@gmail.com'}?subject=${encodeURIComponent('Commercial Growth Audit enquiry')}&body=${encodeURIComponent('Hi Laura,\n\nI tried to request a Commercial Growth Audit but the form did not send properly.\n\nThanks,\n' + (answers.name || ''))}">Laura directly</a>.`;
   }
 }
