@@ -1,4 +1,4 @@
-// Commercial Growth V9 - premium diagnostic + acquisition funnel
+// Commercial Growth V10 - launch QA, resilient lead delivery + email handoff
 const CONFIG = window.CG_CONFIG || {};
 const YEAR = document.getElementById('year');
 if (YEAR) YEAR.textContent = new Date().getFullYear();
@@ -35,7 +35,7 @@ function createLeadId() {
   if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
   return `cg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
-const leadId = sessionStorage.getItem('cg_lead_id') || createLeadId();
+let leadId = sessionStorage.getItem('cg_lead_id') || createLeadId();
 sessionStorage.setItem('cg_lead_id', leadId);
 
 function escapeHTML(value = '') {
@@ -115,15 +115,47 @@ document.getElementById('cookie-essential')?.addEventListener('click', () => {
   hidePrivacyChoices();
 });
 
+// Cross-device email handoff. On phones/tablets we use the device mail composer.
+// On desktop we open Gmail directly to a pre-addressed draft, which avoids browsers
+// treating mailto links as an ordinary navigation when no desktop mail client is configured.
+function isMobileMailDevice() {
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
+    (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+}
+
+function buildMailDraft(subject, body) {
+  const to = CONFIG.contactEmail || 'lauraqbusiness@gmail.com';
+  const mailto = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  const gmail = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  return { mailto, gmail };
+}
+
+function openEmailDraft(subject, body) {
+  const draft = buildMailDraft(subject, body);
+  if (isMobileMailDevice()) {
+    window.location.href = draft.mailto;
+    return;
+  }
+  const opened = window.open(draft.gmail, '_blank', 'noopener');
+  if (!opened) window.location.href = draft.mailto;
+}
+
+const generalEmailSubject = 'Commercial Growth enquiry';
+const generalEmailBody = `Hi Laura,\n\nI came across Commercial Growth and wanted to get in touch about my business.\n\nMy business is:\n\nI’d like to ask about:\n\nThanks,`;
+
 // Track lower-friction contact intent without collecting any personal data in analytics.
-document.getElementById('contact-email')?.addEventListener('click', () => {
+document.getElementById('contact-email')?.addEventListener('click', (event) => {
+  event.preventDefault();
   trackEvent('cg_email_clicked', { placement: 'contact_section' });
+  openEmailDraft(generalEmailSubject, generalEmailBody);
 });
 document.getElementById('contact-instagram')?.addEventListener('click', () => {
   trackEvent('cg_instagram_clicked', { placement: 'contact_section' });
 });
-document.getElementById('footer-email')?.addEventListener('click', () => {
+document.getElementById('footer-email')?.addEventListener('click', (event) => {
+  event.preventDefault();
   trackEvent('cg_email_clicked', { placement: 'footer' });
+  openEmailDraft(generalEmailSubject, generalEmailBody);
 });
 
 const questions = [
@@ -615,6 +647,30 @@ const areaCopy = {
   offer: ['REVENUE', 'Offer structure & revenue expansion']
 };
 
+function payloadToFormData(payload) {
+  const data = new FormData();
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    data.append(key, Array.isArray(value) ? value.join(' | ') : String(value));
+  });
+  return data;
+}
+
+async function postToFormspree(endpoint, payload) {
+  const response = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Accept': 'application/json' },
+    body: payloadToFormData(payload)
+  });
+  let responseBody = null;
+  try { responseBody = await response.json(); } catch (_) {}
+  if (!response.ok) {
+    const detail = responseBody?.errors?.map((item) => item.message).filter(Boolean).join('; ');
+    throw new Error(detail || `Formspree returned ${response.status}`);
+  }
+  return responseBody;
+}
+
 async function submitLead() {
   const consentBox = document.getElementById('lead-consent');
   const status = document.getElementById('submit-status');
@@ -639,6 +695,8 @@ async function submitLead() {
 
   const priorities = scoreSnapshot();
   const payload = {
+    submission_type: 'commercial_growth_check',
+    _subject: `New Commercial Growth Check${answers.business ? ` - ${answers.business}` : ''}`,
     ...answers,
     lead_id: leadId,
     stage: 'diagnostic_complete_price_reveal',
@@ -652,12 +710,7 @@ async function submitLead() {
   };
 
   try {
-    const response = await fetch(endpoint, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!response.ok) throw new Error('Submission failed');
+    await postToFormspree(endpoint, payload);
     leadSubmitted = true;
     trackEvent('cg_diagnostic_completed', {
       challenge: Array.isArray(answers.challenge) ? answers.challenge.join('|') : answers.challenge,
@@ -723,8 +776,6 @@ function showSnapshot(priorities) {
 
   const questionSubject = 'Question about Commercial Growth';
   const questionBody = `Hi Laura,\n\nI’ve completed the Commercial Growth Check${answers.business ? ` for ${answers.business}` : ''} and I have a question before deciding on the Audit.\n\nMy question is:\n\n\nThanks,\n${answers.name || ''}`;
-  const emailAddress = CONFIG.contactEmail || 'lauraqbusiness@gmail.com';
-  const questionMailtoUrl = `mailto:${emailAddress}?subject=${encodeURIComponent(questionSubject)}&body=${encodeURIComponent(questionBody)}`;
 
   snapshotStage.innerHTML = `
     <div class="snapshot-top">
@@ -754,6 +805,7 @@ function showSnapshot(priorities) {
         <button class="button primary" id="request-audit" type="button">Request my Audit</button>
         <button class="button secondary" id="ask-question" type="button">I have a question first</button>
       </div>
+      <button class="retake-check" id="retake-check" type="button">Start a fresh Check</button>
       <div id="intent-confirmation"></div>
     </div>`;
   snapshotStage.classList.add('active');
@@ -765,10 +817,23 @@ function showSnapshot(priorities) {
   document.getElementById('ask-question').addEventListener('click', (event) => {
     event.preventDefault();
     trackEvent('cg_question_clicked');
-    // Explicitly hand the draft to the device's default email app.
-    // Using a button + mailto assignment is more reliable inside mobile/in-app browsers
-    // than letting the browser navigate an injected anchor itself.
-    window.location.href = questionMailtoUrl;
+    openEmailDraft(questionSubject, questionBody);
+  });
+  document.getElementById('retake-check')?.addEventListener('click', () => {
+    answers = {};
+    sessionStorage.removeItem('cg_check_answers');
+    leadId = createLeadId();
+    sessionStorage.setItem('cg_lead_id', leadId);
+    leadSubmitted = false;
+    priceViewed = false;
+    auditRequested = false;
+    questionIndex = 0;
+    snapshotStage.classList.remove('active');
+    snapshotStage.innerHTML = '';
+    form.style.display = '';
+    backButton.hidden = true;
+    renderQuestion();
+    trackEvent('cg_check_restarted');
   });
 }
 
@@ -781,22 +846,19 @@ async function requestAudit() {
 
   try {
     if (endpoint) {
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({
-          lead_id: leadId,
-          stage: 'audit_requested',
-          lead_priority: scoreLeadFit(),
-          name: answers.name,
-          business: answers.business,
-          email: answers.email,
-          support_interest: answers.support_interest,
-          timeline: answers.timeline,
-          submitted_at: new Date().toISOString()
-        })
+      await postToFormspree(endpoint, {
+        submission_type: 'audit_request',
+        _subject: `Commercial Growth Audit request${answers.business ? ` - ${answers.business}` : ''}`,
+        lead_id: leadId,
+        stage: 'audit_requested',
+        lead_priority: scoreLeadFit(),
+        name: answers.name,
+        business: answers.business,
+        email: answers.email,
+        support_interest: answers.support_interest,
+        timeline: answers.timeline,
+        submitted_at: new Date().toISOString()
       });
-      if (!response.ok) throw new Error('Intent failed');
     }
     auditRequested = true;
     trackEvent('cg_audit_requested', { support_interest: answers.support_interest, timeline: answers.timeline });

@@ -1,3 +1,7 @@
+# Commercial Growth V10
+
+Launch QA build. Includes all V9 features plus consistent SVG logo rendering, desktop Gmail draft handoff, mobile mail-app handoff, more resilient Formspree FormData submissions, submission-type labels, and a fresh-check reset for accurate testing.
+
 # Commercial Growth acquisition-ready website
 
 Static GitHub Pages site for `commercialgrowth.ie` with a built-in Commercial Growth Check and acquisition attribution.
