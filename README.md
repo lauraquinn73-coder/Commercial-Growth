@@ -79,3 +79,9 @@ Do not add online payment or one-click contracting without another legal review.
 - Zoom browser text to 200% and check that content remains readable and operable.
 - Test with reduced-motion enabled if available.
 - Confirm no personal location/address appears anywhere until a compliant business service address is intentionally added.
+
+
+## V12 updates
+- Replaced the top-bar “Take the Check” CTA with the warmer “Find the gaps”.
+- Added an in-app-browser-safe email handoff: Instagram/TikTok/Facebook open a pre-addressed Gmail draft; normal mobile browsers use the device mail composer; desktop opens Gmail compose.
+- Email links use a Gmail HTTPS fallback so a blocked mailto link does not produce “link cannot be loaded”.

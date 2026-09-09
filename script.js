@@ -171,12 +171,16 @@ document.getElementById('cookie-essential')?.addEventListener('click', () => {
   hidePrivacyChoices();
 });
 
-// Cross-device email handoff. On phones/tablets we use the device mail composer.
-// On desktop we open Gmail directly to a pre-addressed draft, which avoids browsers
-// treating mailto links as an ordinary navigation when no desktop mail client is configured.
+// Cross-device email handoff. Instagram and other in-app browsers often block
+// mailto: navigation, so they are sent to a pre-addressed Gmail compose screen instead.
+// Normal mobile browsers can still hand off to the device mail app; desktop opens Gmail.
 function isMobileMailDevice() {
   return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
     (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+}
+
+function isInAppBrowser() {
+  return /Instagram|FBAN|FBAV|FB_IAB|TikTok|Line\//i.test(navigator.userAgent);
 }
 
 function buildMailDraft(subject, body) {
@@ -188,12 +192,25 @@ function buildMailDraft(subject, body) {
 
 function openEmailDraft(subject, body) {
   const draft = buildMailDraft(subject, body);
-  if (isMobileMailDevice()) {
-    window.location.href = draft.mailto;
+
+  if (isInAppBrowser()) {
+    // HTTPS is reliably loadable inside Instagram/TikTok/Facebook browsers.
+    window.location.href = draft.gmail;
     return;
   }
+
+  if (isMobileMailDevice()) {
+    const link = document.createElement('a');
+    link.href = draft.mailto;
+    link.style.display = 'none';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    return;
+  }
+
   const opened = window.open(draft.gmail, '_blank', 'noopener');
-  if (!opened) window.location.href = draft.mailto;
+  if (!opened) window.location.href = draft.gmail;
 }
 
 const generalEmailSubject = 'Commercial Growth enquiry';
