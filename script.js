@@ -1,4 +1,4 @@
-// Commercial Growth V10 - launch QA, resilient lead delivery + email handoff
+// Commercial Growth V11 - legal/privacy/accessibility hardening
 const CONFIG = window.CG_CONFIG || {};
 const YEAR = document.getElementById('year');
 if (YEAR) YEAR.textContent = new Date().getFullYear();
@@ -19,17 +19,21 @@ if (reducedMotion || !('IntersectionObserver' in window)) {
   document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
 }
 
-// Attribution: stored for the session and attached to submitted leads.
+// Acquisition context is kept in memory only. No browser storage is used for
+// marketing attribution. If a visitor submits the Check, the limited UTM/source
+// values below are attached to that enquiry.
 const attributionKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
 const params = new URLSearchParams(window.location.search);
-const existingAttribution = JSON.parse(sessionStorage.getItem('cg_attribution') || '{}');
-const attribution = { ...existingAttribution };
+const attribution = {};
 attributionKeys.forEach((key) => {
-  if (params.get(key)) attribution[key] = params.get(key);
+  if (params.get(key)) attribution[key] = params.get(key).slice(0, 160);
 });
-if (!attribution.first_referrer) attribution.first_referrer = document.referrer || 'direct';
-if (!attribution.landing_page) attribution.landing_page = window.location.href;
-sessionStorage.setItem('cg_attribution', JSON.stringify(attribution));
+try {
+  attribution.first_referrer = document.referrer ? new URL(document.referrer).hostname : 'direct';
+} catch (_) {
+  attribution.first_referrer = 'direct';
+}
+attribution.landing_page = window.location.pathname || '/';
 
 function createLeadId() {
   if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -57,19 +61,42 @@ const analyticsConfigured = /^G-[A-Z0-9]+$/i.test(analyticsId);
 
 function loadAnalytics() {
   if (!analyticsConfigured || analyticsReady) return;
+  window[`ga-disable-${analyticsId}`] = false;
   window.dataLayer = window.dataLayer || [];
   window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };
   window.gtag('js', new Date());
   window.gtag('config', analyticsId, {
     send_page_view: true,
     allow_google_signals: false,
-    allow_ad_personalization_signals: false
+    allow_ad_personalization_signals: false,
+    cookie_expires: 90 * 24 * 60 * 60,
+    cookie_update: false
   });
   const script = document.createElement('script');
   script.async = true;
   script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(analyticsId)}`;
   document.head.appendChild(script);
   analyticsReady = true;
+}
+
+function deleteAnalyticsCookies() {
+  const names = document.cookie.split(';').map((part) => part.split('=')[0].trim()).filter((name) => name === '_ga' || name.startsWith('_ga_'));
+  const domains = [window.location.hostname, `.${window.location.hostname}`];
+  names.forEach((name) => {
+    document.cookie = `${name}=; Max-Age=0; path=/; SameSite=Lax`;
+    domains.forEach((domain) => {
+      document.cookie = `${name}=; Max-Age=0; path=/; domain=${domain}; SameSite=Lax`;
+    });
+  });
+}
+
+function disableAnalytics() {
+  if (analyticsConfigured) window[`ga-disable-${analyticsId}`] = true;
+  if (typeof window.gtag === 'function') {
+    window.gtag('consent', 'update', { analytics_storage: 'denied' });
+  }
+  analyticsReady = false;
+  deleteAnalyticsCookies();
 }
 
 function trackEvent(name, details = {}) {
@@ -80,7 +107,35 @@ function trackEvent(name, details = {}) {
 
 const cookieBanner = document.getElementById('cookie-banner');
 const privacyChoicesButton = document.getElementById('privacy-choices');
-const storedConsent = localStorage.getItem('cg_analytics_consent');
+const CONSENT_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
+
+function readStoredConsent() {
+  const raw = localStorage.getItem('cg_analytics_consent');
+  if (!raw) return null;
+  if (raw === 'yes' || raw === 'no') {
+    // Migrate older versions and ask again rather than treating an undated choice as permanent.
+    localStorage.removeItem('cg_analytics_consent');
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw);
+    if (!parsed || !['yes', 'no'].includes(parsed.choice) || !parsed.savedAt) return null;
+    if (Date.now() - Number(parsed.savedAt) > CONSENT_MAX_AGE_MS) {
+      localStorage.removeItem('cg_analytics_consent');
+      return null;
+    }
+    return parsed.choice;
+  } catch (_) {
+    localStorage.removeItem('cg_analytics_consent');
+    return null;
+  }
+}
+
+function storeConsent(choice) {
+  localStorage.setItem('cg_analytics_consent', JSON.stringify({ choice, savedAt: Date.now() }));
+}
+
+const storedConsent = readStoredConsent();
 
 function showPrivacyChoices() {
   if (!cookieBanner || !analyticsConfigured) return;
@@ -104,14 +159,15 @@ privacyChoicesButton?.addEventListener('click', () => {
 });
 
 document.getElementById('cookie-allow')?.addEventListener('click', () => {
-  localStorage.setItem('cg_analytics_consent', 'yes');
+  storeConsent('yes');
   hidePrivacyChoices();
   loadAnalytics();
   trackEvent('cg_analytics_consent', { choice: 'accepted' });
 });
 
 document.getElementById('cookie-essential')?.addEventListener('click', () => {
-  localStorage.setItem('cg_analytics_consent', 'no');
+  storeConsent('no');
+  disableAnalytics();
   hidePrivacyChoices();
 });
 
@@ -179,7 +235,7 @@ const questions = [
   {
     id: 'offer',
     title: 'What does the business actually sell?',
-    help: 'A sentence or two is enough. Tell me what customers pay you for.',
+    help: 'A sentence or two is enough. Do not include customer names, staff details, health information or other sensitive personal data.',
     type: 'textarea',
     placeholder: 'We sell…',
     required: true
@@ -187,10 +243,10 @@ const questions = [
   {
     id: 'business_url',
     title: 'Where can I take a look at the business?',
-    help: 'Website, Instagram or another public link.',
+    help: 'Optional. Website, Instagram or another public business link.',
     type: 'url',
     placeholder: 'https://…',
-    required: true
+    required: false
   },
   {
     id: 'email',
@@ -295,7 +351,8 @@ const questions = [
       ['linkedin', 'LinkedIn'],
       ['google', 'Google / search'],
       ['outreach', 'Laura contacted me'],
-      ['other', 'Somewhere else']
+      ['other', 'Somewhere else'],
+      ['prefer_not', 'Prefer not to say']
     ]
   }
 ];
@@ -309,12 +366,19 @@ const backButton = document.getElementById('check-back');
 let questionIndex = -1;
 let answers = JSON.parse(sessionStorage.getItem('cg_check_answers') || '{}');
 let leadSubmitted = false;
+let previouslyFocusedElement = null;
+
+function getFocusableElements(container) {
+  return [...container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+    .filter((el) => !el.hidden && el.getAttribute('aria-hidden') !== 'true');
+}
 
 function saveDraft() {
   sessionStorage.setItem('cg_check_answers', JSON.stringify(answers));
 }
 
 function openCheck() {
+  previouslyFocusedElement = document.activeElement;
   modal.classList.add('open');
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('check-open');
@@ -329,6 +393,10 @@ function openCheck() {
   }
 
   trackEvent('cg_check_opened', { source: 'site_cta' });
+  window.setTimeout(() => {
+    const focusables = getFocusableElements(modal);
+    (focusables[0] || document.getElementById('check-close'))?.focus({ preventScroll: true });
+  }, 30);
 }
 function closeCheck() {
   modal.classList.remove('open');
@@ -339,12 +407,34 @@ function closeCheck() {
   } else if (leadSubmitted && priceViewed && !auditRequested) {
     trackEvent('cg_price_abandoned', { stage: 'price_viewed_no_request' });
   }
+  if (previouslyFocusedElement && typeof previouslyFocusedElement.focus === 'function') {
+    previouslyFocusedElement.focus({ preventScroll: true });
+  }
 }
 
 document.querySelectorAll('.js-open-check').forEach((button) => button.addEventListener('click', openCheck));
 document.getElementById('check-close')?.addEventListener('click', closeCheck);
 modal?.addEventListener('click', (e) => { if (e.target === modal) closeCheck(); });
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && modal?.classList.contains('open')) closeCheck(); });
+document.addEventListener('keydown', (e) => {
+  if (!modal?.classList.contains('open')) return;
+  if (e.key === 'Escape') {
+    closeCheck();
+    return;
+  }
+  if (e.key === 'Tab') {
+    const focusables = getFocusableElements(modal);
+    if (!focusables.length) return;
+    const first = focusables[0];
+    const last = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === first) {
+      e.preventDefault();
+      last.focus();
+    } else if (!e.shiftKey && document.activeElement === last) {
+      e.preventDefault();
+      first.focus();
+    }
+  }
+});
 
 if (window.location.hash === '#check') openCheck();
 
@@ -376,11 +466,28 @@ function renderQuestion() {
 
   const card = document.createElement('div');
   card.className = 'question-card';
-  card.innerHTML = `<div class="question-copy"><p class="question-kicker">Question ${questionIndex + 1}</p><h2>${q.title}</h2>${q.help ? `<p class="question-help">${q.help}</p>` : ''}</div>`;
+  const titleId = `question-title-${q.id}`;
+  const helpId = q.help ? `question-help-${q.id}` : '';
+  card.innerHTML = `<div class="question-copy"><p class="question-kicker">Question ${questionIndex + 1}</p><h2 id="${titleId}" tabindex="-1">${q.title}</h2>${q.help ? `<p class="question-help" id="${helpId}">${q.help}</p>` : ''}</div>`;
 
   if (q.type === 'choice') {
     const grid = document.createElement('div');
     grid.className = 'option-grid';
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-labelledby', titleId);
+    if (helpId) grid.setAttribute('aria-describedby', helpId);
+
+    const actions = document.createElement('div');
+    actions.className = 'multi-actions';
+    const hint = document.createElement('span');
+    hint.className = 'selection-count';
+    hint.textContent = 'Choose one option';
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.className = 'button primary multi-continue';
+    next.textContent = 'Continue';
+    next.disabled = !answers[q.id];
+
     q.options.forEach(([value, label]) => {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -396,17 +503,24 @@ function renderQuestion() {
         });
         btn.classList.add('selected');
         btn.setAttribute('aria-pressed', 'true');
-        window.setTimeout(nextQuestion, 140);
+        next.disabled = false;
       });
       grid.appendChild(btn);
     });
+    next.addEventListener('click', () => { if (answers[q.id]) nextQuestion(); });
+    actions.appendChild(hint);
+    actions.appendChild(next);
     card.appendChild(grid);
+    card.appendChild(actions);
   } else if (q.type === 'multi') {
     const selected = Array.isArray(answers[q.id]) ? [...answers[q.id]] : [];
     answers[q.id] = selected;
 
     const grid = document.createElement('div');
     grid.className = 'option-grid multi-option-grid';
+    grid.setAttribute('role', 'group');
+    grid.setAttribute('aria-labelledby', titleId);
+    if (helpId) grid.setAttribute('aria-describedby', helpId);
 
     const actions = document.createElement('div');
     actions.className = 'multi-actions';
@@ -477,6 +591,12 @@ function renderQuestion() {
     input.placeholder = q.placeholder || '';
     if (q.type !== 'textarea') input.type = q.type;
     if (q.autocomplete) input.autocomplete = q.autocomplete;
+    input.required = Boolean(q.required);
+    input.setAttribute('aria-required', q.required ? 'true' : 'false');
+    const maxLengths = { name: 80, business: 120, offer: 500, business_url: 300, email: 254 };
+    if (maxLengths[q.id]) input.maxLength = maxLengths[q.id];
+    input.setAttribute('aria-labelledby', titleId);
+    if (helpId) input.setAttribute('aria-describedby', helpId);
     input.value = answers[q.id] || '';
     card.appendChild(input);
 
@@ -498,9 +618,8 @@ function renderQuestion() {
     card.appendChild(actions);
   }
 
-  card.tabIndex = -1;
   form.appendChild(card);
-  window.setTimeout(() => card.focus({ preventScroll: true }), 40);
+  window.setTimeout(() => document.getElementById(titleId)?.focus({ preventScroll: true }), 40);
 }
 
 function validateTextQuestion(q, input) {
@@ -509,6 +628,12 @@ function validateTextQuestion(q, input) {
   if (q.required && !value) {
     input.setCustomValidity('Please answer this question.');
     input.reportValidity();
+    return;
+  }
+  if (!value && !q.required) {
+    answers[q.id] = '';
+    saveDraft();
+    nextQuestion();
     return;
   }
   if (q.type === 'email' && !/^\S+@\S+\.\S+$/.test(value)) {
@@ -550,12 +675,16 @@ function renderConsent() {
   form.innerHTML = `
     <div class="question-card">
       <p class="question-kicker">BEFORE YOUR RESULT</p>
-      <h2>I’ve got enough to know where I’d start looking.</h2>
+      <h2 id="consent-title" tabindex="-1">I’ve got enough to know where I’d start looking.</h2>
       <p class="question-help">I’ll send your answers directly to Laura first. Then your Commercial Growth Snapshot and the audit investment will appear on the next screen.</p>
+      <div class="honeypot-field" aria-hidden="true">
+        <label for="website-confirm">Leave this field empty</label>
+        <input type="text" id="website-confirm" name="website_confirm" tabindex="-1" autocomplete="off" />
+      </div>
       <div class="consent-box">
         <label class="consent-row">
           <input type="checkbox" id="lead-consent" />
-          <span>I’m happy for Commercial Growth to use these answers and my contact details to respond to this enquiry. This does not subscribe me to marketing. <a href="privacy.html" target="_blank">Privacy notice</a>.</span>
+          <span>I understand how my information will be used to respond to this business enquiry and I confirm I have not included sensitive personal data or confidential customer/staff records. This does not subscribe me to marketing. <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span>
         </label>
       </div>
       <button class="button primary" id="submit-diagnostic" type="button">Show me what you’d investigate</button>
@@ -563,6 +692,7 @@ function renderConsent() {
     </div>`;
 
   document.getElementById('submit-diagnostic').addEventListener('click', submitLead);
+  window.setTimeout(() => document.getElementById('consent-title')?.focus({ preventScroll: true }), 30);
 }
 
 function scoreSnapshot() {
@@ -673,10 +803,16 @@ async function postToFormspree(endpoint, payload) {
 
 async function submitLead() {
   const consentBox = document.getElementById('lead-consent');
+  const honeypot = document.getElementById('website-confirm');
   const status = document.getElementById('submit-status');
   const button = document.getElementById('submit-diagnostic');
+  if (honeypot?.value) {
+    status.textContent = 'Unable to submit this request.';
+    status.classList.add('error');
+    return;
+  }
   if (!consentBox.checked) {
-    status.textContent = 'Please confirm the privacy notice before continuing.';
+    status.textContent = 'Please confirm the privacy acknowledgement before continuing.';
     status.classList.add('error');
     return;
   }
@@ -705,7 +841,7 @@ async function submitLead() {
     priority_2: areaCopy[priorities[1]][1],
     priority_3: areaCopy[priorities[2]][1],
     ...attribution,
-    page_url: window.location.href,
+    page_path: window.location.pathname || '/',
     submitted_at: new Date().toISOString()
   };
 
@@ -780,7 +916,7 @@ function showSnapshot(priorities) {
   snapshotStage.innerHTML = `
     <div class="snapshot-top">
       <p class="eyebrow">YOUR COMMERCIAL GROWTH SNAPSHOT</p>
-      <h2>${answers.name ? `${escapeHTML(answers.name)}, ` : ''}here’s where I would start.</h2>
+      <h2 id="snapshot-title" tabindex="-1">${answers.name ? `${escapeHTML(answers.name)}, ` : ''}here’s where I would start.</h2>
       <p class="snapshot-intro">Your answers have been compared across the commercial journey to surface the areas most worth investigating first.</p>
       <div class="snapshot-rationale"><span>WHY THESE AREAS SURFACED</span><p>${escapeHTML(tailoredReason)}</p></div>
       <p class="snapshot-disclaimer">This is an initial commercial snapshot, not a diagnosis. I would validate the causes against the real customer journey, process and performance data before recommending changes.</p>
@@ -800,7 +936,7 @@ function showSnapshot(priorities) {
         <span class="price-standard">Founding client rate · standard rate <s>${CONFIG.auditStandardPrice || '€495'}</s></span>
       </div>
       ${implementationNote}
-      <p class="request-note">Requesting an Audit does not take payment here. It lets Laura know you want to move forward so fit, scope and next steps can be confirmed first.</p>
+      <p class="request-note">Requesting an Audit does not take payment or create a contract. Fit, scope, fees and engagement terms are confirmed separately before paid work begins. <a href="terms.html" target="_blank" rel="noopener noreferrer">Terms</a> · <a href="refunds.html" target="_blank" rel="noopener noreferrer">Refund policy</a>.</p>
       <div class="snapshot-actions">
         <button class="button primary" id="request-audit" type="button">Request my Audit</button>
         <button class="button secondary" id="ask-question" type="button">I have a question first</button>
@@ -810,6 +946,7 @@ function showSnapshot(priorities) {
     </div>`;
   snapshotStage.classList.add('active');
   priceViewed = true;
+  window.setTimeout(() => document.getElementById('snapshot-title')?.focus({ preventScroll: true }), 30);
   trackEvent('cg_snapshot_viewed', { priority_count: priorities.length });
   trackEvent('cg_price_viewed', { audit_price: (CONFIG.auditLaunchPrice || '349').replace(/\D/g, '') });
 
