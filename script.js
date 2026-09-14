@@ -1,7 +1,18 @@
-// Commercial Growth V11 - legal/privacy/accessibility hardening
+// Commercial Growth FINAL MEGA V14 - launch, legal, analytics, acquisition and search hardening
 const CONFIG = window.CG_CONFIG || {};
 const YEAR = document.getElementById('year');
 if (YEAR) YEAR.textContent = new Date().getFullYear();
+
+
+function safeStorageGet(storage, key, fallback = null) {
+  try { const value = storage.getItem(key); return value === null ? fallback : value; } catch (_) { return fallback; }
+}
+function safeStorageSet(storage, key, value) {
+  try { storage.setItem(key, value); return true; } catch (_) { return false; }
+}
+function safeStorageRemove(storage, key) {
+  try { storage.removeItem(key); } catch (_) {}
+}
 
 // Reveal animations
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -39,8 +50,8 @@ function createLeadId() {
   if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
   return `cg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
-let leadId = sessionStorage.getItem('cg_lead_id') || createLeadId();
-sessionStorage.setItem('cg_lead_id', leadId);
+let leadId = safeStorageGet(sessionStorage, 'cg_lead_id') || createLeadId();
+safeStorageSet(sessionStorage, 'cg_lead_id', leadId);
 
 function escapeHTML(value = '') {
   return String(value).replace(/[&<>'"]/g, (char) => ({
@@ -65,8 +76,12 @@ function loadAnalytics() {
   window.dataLayer = window.dataLayer || [];
   window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };
   window.gtag('js', new Date());
+  let sanitizedReferrer = '';
+  try { sanitizedReferrer = document.referrer ? new URL(document.referrer).origin : ''; } catch (_) {}
   window.gtag('config', analyticsId, {
     send_page_view: true,
+    page_location: `${window.location.origin}${window.location.pathname}`,
+    page_referrer: sanitizedReferrer,
     allow_google_signals: false,
     allow_ad_personalization_signals: false,
     cookie_expires: 90 * 24 * 60 * 60,
@@ -77,6 +92,14 @@ function loadAnalytics() {
   script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(analyticsId)}`;
   document.head.appendChild(script);
   analyticsReady = true;
+  const safeCampaignValue = (value) => /^[A-Za-z0-9._-]{1,60}$/.test(value || '') ? value : undefined;
+  const campaignDetails = {
+    source: safeCampaignValue(attribution.utm_source),
+    medium: safeCampaignValue(attribution.utm_medium),
+    campaign: safeCampaignValue(attribution.utm_campaign)
+  };
+  Object.keys(campaignDetails).forEach((key) => campaignDetails[key] === undefined && delete campaignDetails[key]);
+  if (Object.keys(campaignDetails).length) window.gtag('event', 'cg_acquisition_context', campaignDetails);
 }
 
 function deleteAnalyticsCookies() {
@@ -110,29 +133,29 @@ const privacyChoicesButton = document.getElementById('privacy-choices');
 const CONSENT_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
 
 function readStoredConsent() {
-  const raw = localStorage.getItem('cg_analytics_consent');
+  const raw = safeStorageGet(localStorage, 'cg_analytics_consent');
   if (!raw) return null;
   if (raw === 'yes' || raw === 'no') {
     // Migrate older versions and ask again rather than treating an undated choice as permanent.
-    localStorage.removeItem('cg_analytics_consent');
+    safeStorageRemove(localStorage, 'cg_analytics_consent');
     return null;
   }
   try {
     const parsed = JSON.parse(raw);
     if (!parsed || !['yes', 'no'].includes(parsed.choice) || !parsed.savedAt) return null;
     if (Date.now() - Number(parsed.savedAt) > CONSENT_MAX_AGE_MS) {
-      localStorage.removeItem('cg_analytics_consent');
+      safeStorageRemove(localStorage, 'cg_analytics_consent');
       return null;
     }
     return parsed.choice;
   } catch (_) {
-    localStorage.removeItem('cg_analytics_consent');
+    safeStorageRemove(localStorage, 'cg_analytics_consent');
     return null;
   }
 }
 
 function storeConsent(choice) {
-  localStorage.setItem('cg_analytics_consent', JSON.stringify({ choice, savedAt: Date.now() }));
+  safeStorageSet(localStorage, 'cg_analytics_consent', JSON.stringify({ choice, savedAt: Date.now() }));
 }
 
 const storedConsent = readStoredConsent();
@@ -381,9 +404,17 @@ const progress = document.getElementById('check-progress');
 const stepLabel = document.getElementById('check-step-label');
 const backButton = document.getElementById('check-back');
 let questionIndex = -1;
-let answers = JSON.parse(sessionStorage.getItem('cg_check_answers') || '{}');
+let answers = JSON.parse(safeStorageGet(sessionStorage, 'cg_check_answers', '{}') || '{}');
 let leadSubmitted = false;
 let previouslyFocusedElement = null;
+
+const modalBackground = [...document.querySelectorAll('body > header, body > main, body > footer')];
+function setModalBackgroundInert(isInert) {
+  modalBackground.forEach((el) => {
+    if (isInert) el.setAttribute('inert', '');
+    else el.removeAttribute('inert');
+  });
+}
 
 function getFocusableElements(container) {
   return [...container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')]
@@ -391,14 +422,16 @@ function getFocusableElements(container) {
 }
 
 function saveDraft() {
-  sessionStorage.setItem('cg_check_answers', JSON.stringify(answers));
+  safeStorageSet(sessionStorage, 'cg_check_answers', JSON.stringify(answers));
 }
 
-function openCheck() {
+function openCheck(event) {
   previouslyFocusedElement = document.activeElement;
+  const source = event?.currentTarget?.dataset?.ctaLocation || 'site_cta';
   modal.classList.add('open');
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('check-open');
+  setModalBackgroundInert(true);
 
   if (questionIndex === -1 && !snapshotStage.classList.contains('active')) {
     questionIndex = 0;
@@ -409,7 +442,7 @@ function openCheck() {
     backButton.hidden = false;
   }
 
-  trackEvent('cg_check_opened', { source: 'site_cta' });
+  trackEvent('cg_check_opened', { source });
   window.setTimeout(() => {
     const focusables = getFocusableElements(modal);
     (focusables[0] || document.getElementById('check-close'))?.focus({ preventScroll: true });
@@ -419,6 +452,7 @@ function closeCheck() {
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('check-open');
+  setModalBackgroundInert(false);
   if (questionIndex >= 0 && !leadSubmitted) {
     trackEvent('cg_check_closed', { question_number: questionIndex + 1 });
   } else if (leadSubmitted && priceViewed && !auditRequested) {
@@ -696,7 +730,7 @@ function renderConsent() {
       <p class="question-help">I’ll send your answers directly to Laura first. Then your Commercial Growth Snapshot and the audit investment will appear on the next screen.</p>
       <div class="honeypot-field" aria-hidden="true">
         <label for="website-confirm">Leave this field empty</label>
-        <input type="text" id="website-confirm" name="website_confirm" tabindex="-1" autocomplete="off" />
+        <input type="text" id="website-confirm" name="_gotcha" tabindex="-1" autocomplete="off" />
       </div>
       <div class="consent-box">
         <label class="consent-row">
@@ -848,6 +882,7 @@ async function submitLead() {
 
   const priorities = scoreSnapshot();
   const payload = {
+    _gotcha: '',
     submission_type: 'commercial_growth_check',
     _subject: `New Commercial Growth Check${answers.business ? ` - ${answers.business}` : ''}`,
     ...answers,
@@ -975,9 +1010,9 @@ function showSnapshot(priorities) {
   });
   document.getElementById('retake-check')?.addEventListener('click', () => {
     answers = {};
-    sessionStorage.removeItem('cg_check_answers');
+    safeStorageRemove(sessionStorage, 'cg_check_answers');
     leadId = createLeadId();
-    sessionStorage.setItem('cg_lead_id', leadId);
+    safeStorageSet(sessionStorage, 'cg_lead_id', leadId);
     leadSubmitted = false;
     priceViewed = false;
     auditRequested = false;
