@@ -1,0 +1,12 @@
+{
+  "name": "commercial-growth-scanner-worker",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "dev": "npx wrangler dev --local --port 8787",
+    "deploy": "npx wrangler deploy",
+    "dry-run": "npx wrangler deploy --dry-run"
+  }
+}

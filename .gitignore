@@ -1,0 +1,14 @@
+# Local Cloudflare development, dependencies and secrets
+**/.wrangler/
+**/node_modules/
+**/.dev.vars
+**/.env
+**/.env.*
+!**/.env.example
+.DS_Store
+Thumbs.db
+*.log
+# Local archives/test outputs
+*.zip
+playwright-report/
+test-results/
