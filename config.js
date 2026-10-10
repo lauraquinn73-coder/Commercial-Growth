@@ -8,7 +8,7 @@ window.CG_CONFIG = {
   gaMeasurementId: "G-5PNH8XMW8N",
 
   contactEmail: "lauraqbusiness@gmail.com",
-  auditLaunchPrice: "â‚¬349",
+  auditLaunchPrice: "\u20AC349",
 
   // Cloudflare Turnstile public site key; configured before public launch.
   // The corresponding SECRET goes only in the Cloudflare Worker, never here.
