@@ -1,18 +1,7 @@
-// Commercial Growth FINAL MEGA V14 - launch, legal, analytics, acquisition and search hardening
+// Commercial Growth V1.4 - Tally enquiry handoff and local-only Check snapshot
 const CONFIG = window.CG_CONFIG || {};
 const YEAR = document.getElementById('year');
 if (YEAR) YEAR.textContent = new Date().getFullYear();
-
-
-function safeStorageGet(storage, key, fallback = null) {
-  try { const value = storage.getItem(key); return value === null ? fallback : value; } catch (_) { return fallback; }
-}
-function safeStorageSet(storage, key, value) {
-  try { storage.setItem(key, value); return true; } catch (_) { return false; }
-}
-function safeStorageRemove(storage, key) {
-  try { storage.removeItem(key); } catch (_) {}
-}
 
 // Reveal animations
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -30,28 +19,73 @@ if (reducedMotion || !('IntersectionObserver' in window)) {
   document.querySelectorAll('.reveal').forEach((el) => observer.observe(el));
 }
 
-// Acquisition context is kept in memory only. No browser storage is used for
-// marketing attribution. If a visitor submits the Check, the limited UTM/source
-// values below are attached to that enquiry.
-const attributionKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
-const params = new URLSearchParams(window.location.search);
-const attribution = {};
-attributionKeys.forEach((key) => {
-  if (params.get(key)) attribution[key] = params.get(key).slice(0, 160);
+// Editorial V1.3: interactive customer journey and mobile navigation.
+const journeyObservations = {
+  interest: { label: '01 / INTEREST', copy: 'Can the right people immediately understand what you offer and why it matters to them?' },
+  enquiry: { label: '02 / ENQUIRY', copy: 'Is it easy to enquire, and does every lead get a clear next step?' },
+  sale: { label: '03 / SALE', copy: 'What slows a decision between initial interest, a quote and a confirmed sale?' },
+  return: { label: '04 / RETURN', copy: 'What makes a customer come back, and do you make that next step easy?' }
+};
+const journeyNodes = Array.from(document.querySelectorAll('[data-journey]'));
+const journeyLabel = document.getElementById('journey-insight-label');
+const journeyCopy = document.getElementById('journey-insight-copy');
+journeyNodes.forEach((node) => {
+  node.addEventListener('click', () => {
+    const selected = journeyObservations[node.dataset.journey];
+    if (!selected || !journeyLabel || !journeyCopy) return;
+    journeyNodes.forEach((candidate) => candidate.setAttribute('aria-pressed', String(candidate === node)));
+    journeyLabel.textContent = selected.label;
+    journeyCopy.textContent = selected.copy;
+    trackEvent('cg_journey_stage_selected', { stage: node.dataset.journey });
+  });
 });
-try {
-  attribution.first_referrer = document.referrer ? new URL(document.referrer).hostname : 'direct';
-} catch (_) {
-  attribution.first_referrer = 'direct';
+const navMenuButton = document.getElementById('nav-menu-toggle');
+const navLinks = document.getElementById('primary-nav-links');
+function closeMobileNav() {
+  navMenuButton?.setAttribute('aria-expanded', 'false');
+  navMenuButton?.setAttribute('aria-label', 'Open navigation menu');
+  navLinks?.classList.remove('is-open');
 }
-attribution.landing_page = window.location.pathname || '/';
+navMenuButton?.addEventListener('click', () => {
+  const open = navMenuButton.getAttribute('aria-expanded') !== 'true';
+  navMenuButton.setAttribute('aria-expanded', String(open));
+  navMenuButton.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
+  navLinks?.classList.toggle('is-open', open);
+});
+navLinks?.querySelectorAll('a').forEach((link) => link.addEventListener('click', closeMobileNav));
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && navMenuButton?.getAttribute('aria-expanded') === 'true') {
+    closeMobileNav();
+    navMenuButton.focus();
+  }
+});
+document.addEventListener('click', (event) => {
+  if (navMenuButton?.getAttribute('aria-expanded') === 'true' && !event.target.closest('.primary-nav')) closeMobileNav();
+});
+window.matchMedia('(min-width: 981px)').addEventListener('change', (event) => { if (event.matches) closeMobileNav(); });
 
-function createLeadId() {
-  if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
-  return `cg-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+// Remove any lead identifier left in session storage by pre-V1.4 site versions.
+try { sessionStorage.removeItem('cg_lead_id'); } catch (_) {}
+
+// The free Check produces an on-device snapshot. No person-specific details,
+// free-text answers or identifying lead reference are sent to Tally by the site.
+// Tally receives only a short category code when a visitor clicks an enquiry link.
+function tallyUrl(requestType = 'general', priorities = []) {
+  const fallback = 'https://tally.so/r/WOGzKv';
+  const base = String(CONFIG.tallyFormUrl || fallback).trim();
+  try {
+    const url = new URL(base);
+    if (url.protocol !== 'https:' || url.hostname !== 'tally.so' || !/^\/r\/[a-zA-Z0-9]+$/.test(url.pathname)) {
+      return fallback;
+    }
+    url.searchParams.set('cg_source', requestType === 'audit' ? 'audit' : 'website');
+    const codes = priorities.filter((item) => Object.hasOwn(areaCopy, item)).slice(0, 3);
+    if (codes.length) url.searchParams.set('cg_focus', codes.join(','));
+    return url.toString();
+  } catch (_) {
+    return fallback;
+  }
 }
-let leadId = safeStorageGet(sessionStorage, 'cg_lead_id') || createLeadId();
-safeStorageSet(sessionStorage, 'cg_lead_id', leadId);
 
 function escapeHTML(value = '') {
   return String(value).replace(/[&<>'"]/g, (char) => ({
@@ -60,7 +94,7 @@ function escapeHTML(value = '') {
 }
 
 let priceViewed = false;
-let auditRequested = false;
+let auditCtaClicked = false;
 
 // Consent-aware GA4. Google Analytics is completely disabled until a valid
 // Measurement ID exists AND the visitor explicitly opts in. No name, email,
@@ -76,12 +110,8 @@ function loadAnalytics() {
   window.dataLayer = window.dataLayer || [];
   window.gtag = window.gtag || function(){ window.dataLayer.push(arguments); };
   window.gtag('js', new Date());
-  let sanitizedReferrer = '';
-  try { sanitizedReferrer = document.referrer ? new URL(document.referrer).origin : ''; } catch (_) {}
   window.gtag('config', analyticsId, {
     send_page_view: true,
-    page_location: `${window.location.origin}${window.location.pathname}`,
-    page_referrer: sanitizedReferrer,
     allow_google_signals: false,
     allow_ad_personalization_signals: false,
     cookie_expires: 90 * 24 * 60 * 60,
@@ -92,14 +122,6 @@ function loadAnalytics() {
   script.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(analyticsId)}`;
   document.head.appendChild(script);
   analyticsReady = true;
-  const safeCampaignValue = (value) => /^[A-Za-z0-9._-]{1,60}$/.test(value || '') ? value : undefined;
-  const campaignDetails = {
-    source: safeCampaignValue(attribution.utm_source),
-    medium: safeCampaignValue(attribution.utm_medium),
-    campaign: safeCampaignValue(attribution.utm_campaign)
-  };
-  Object.keys(campaignDetails).forEach((key) => campaignDetails[key] === undefined && delete campaignDetails[key]);
-  if (Object.keys(campaignDetails).length) window.gtag('event', 'cg_acquisition_context', campaignDetails);
 }
 
 function deleteAnalyticsCookies() {
@@ -133,29 +155,29 @@ const privacyChoicesButton = document.getElementById('privacy-choices');
 const CONSENT_MAX_AGE_MS = 180 * 24 * 60 * 60 * 1000;
 
 function readStoredConsent() {
-  const raw = safeStorageGet(localStorage, 'cg_analytics_consent');
+  const raw = localStorage.getItem('cg_analytics_consent');
   if (!raw) return null;
   if (raw === 'yes' || raw === 'no') {
     // Migrate older versions and ask again rather than treating an undated choice as permanent.
-    safeStorageRemove(localStorage, 'cg_analytics_consent');
+    localStorage.removeItem('cg_analytics_consent');
     return null;
   }
   try {
     const parsed = JSON.parse(raw);
     if (!parsed || !['yes', 'no'].includes(parsed.choice) || !parsed.savedAt) return null;
     if (Date.now() - Number(parsed.savedAt) > CONSENT_MAX_AGE_MS) {
-      safeStorageRemove(localStorage, 'cg_analytics_consent');
+      localStorage.removeItem('cg_analytics_consent');
       return null;
     }
     return parsed.choice;
   } catch (_) {
-    safeStorageRemove(localStorage, 'cg_analytics_consent');
+    localStorage.removeItem('cg_analytics_consent');
     return null;
   }
 }
 
 function storeConsent(choice) {
-  safeStorageSet(localStorage, 'cg_analytics_consent', JSON.stringify({ choice, savedAt: Date.now() }));
+  localStorage.setItem('cg_analytics_consent', JSON.stringify({ choice, savedAt: Date.now() }));
 }
 
 const storedConsent = readStoredConsent();
@@ -174,6 +196,11 @@ if (analyticsConfigured) {
   if (!storedConsent) showPrivacyChoices();
 } else {
   hidePrivacyChoices();
+}
+
+// Visitors coming from any legal page can manage their existing choice.
+if (analyticsConfigured && new URLSearchParams(location.search).get('privacy') === 'manage') {
+  showPrivacyChoices();
 }
 
 privacyChoicesButton?.addEventListener('click', () => {
@@ -240,38 +267,20 @@ const generalEmailSubject = 'Commercial Growth enquiry';
 const generalEmailBody = `Hi Laura,\n\nI came across Commercial Growth and wanted to get in touch about my business.\n\nMy business is:\n\nI’d like to ask about:\n\nThanks,`;
 
 // Track lower-friction contact intent without collecting any personal data in analytics.
-document.getElementById('contact-email')?.addEventListener('click', (event) => {
-  event.preventDefault();
-  trackEvent('cg_email_clicked', { placement: 'contact_section' });
-  openEmailDraft(generalEmailSubject, generalEmailBody);
+document.getElementById('contact-enquiry')?.addEventListener('click', () => {
+  trackEvent('cg_enquiry_link_clicked', { placement: 'contact_section' });
 });
+
 document.getElementById('contact-instagram')?.addEventListener('click', () => {
   trackEvent('cg_instagram_clicked', { placement: 'contact_section' });
 });
-document.getElementById('footer-email')?.addEventListener('click', (event) => {
-  event.preventDefault();
+document.getElementById('footer-email')?.addEventListener('click', () => {
   trackEvent('cg_email_clicked', { placement: 'footer' });
-  openEmailDraft(generalEmailSubject, generalEmailBody);
+  // Keep the native mailto: link so visitors can use Outlook, Apple Mail or
+  // whichever email service they prefer instead of forcing Gmail.
 });
 
 const questions = [
-  {
-    id: 'name',
-    title: 'First, what should I call you?',
-    help: 'Just your first name is perfect.',
-    type: 'text',
-    placeholder: 'Your name',
-    required: true,
-    autocomplete: 'given-name'
-  },
-  {
-    id: 'business',
-    title: 'What is the name of your business?',
-    type: 'text',
-    placeholder: 'Business name',
-    required: true,
-    autocomplete: 'organization'
-  },
   {
     id: 'offer',
     title: 'What does the business actually sell?',
@@ -287,15 +296,6 @@ const questions = [
     type: 'url',
     placeholder: 'https://…',
     required: false
-  },
-  {
-    id: 'email',
-    title: 'Where should I send anything related to your Check?',
-    help: 'This is for your enquiry only. It does not subscribe you to marketing.',
-    type: 'email',
-    placeholder: 'you@business.ie',
-    required: true,
-    autocomplete: 'email'
   },
   {
     id: 'challenge',
@@ -319,9 +319,9 @@ const questions = [
     help: 'An estimate is completely fine.',
     type: 'choice',
     options: [
-      ['0-10', '0–10'],
-      ['11-30', '11–30'],
-      ['31-100', '31–100'],
+      ['0-10', '0 to 10'],
+      ['11-30', '11 to 30'],
+      ['31-100', '31 to 100'],
       ['100+', '100+'],
       ['unknown', 'I genuinely do not know']
     ]
@@ -376,7 +376,7 @@ const questions = [
     type: 'choice',
     options: [
       ['now', 'Now / within the next few weeks'],
-      ['month', 'Within 1–3 months'],
+      ['month', 'Within 1 to 3 months'],
       ['later', 'Later this year'],
       ['research', 'I am mostly exploring right now']
     ]
@@ -404,17 +404,20 @@ const progress = document.getElementById('check-progress');
 const stepLabel = document.getElementById('check-step-label');
 const backButton = document.getElementById('check-back');
 let questionIndex = -1;
-let answers = JSON.parse(safeStorageGet(sessionStorage, 'cg_check_answers', '{}') || '{}');
-let leadSubmitted = false;
-let previouslyFocusedElement = null;
-
-const modalBackground = [...document.querySelectorAll('body > header, body > main, body > footer')];
-function setModalBackgroundInert(isInert) {
-  modalBackground.forEach((el) => {
-    if (isInert) el.setAttribute('inert', '');
-    else el.removeAttribute('inert');
-  });
+let answers = {};
+try {
+  const draft = JSON.parse(sessionStorage.getItem('cg_check_answers') || '{}');
+  if (draft && typeof draft === 'object' && !Array.isArray(draft)) {
+    const allowed = new Set(questions.map((item) => item.id));
+    answers = Object.fromEntries(Object.entries(draft).filter(([key]) => allowed.has(key)));
+  }
+  sessionStorage.setItem('cg_check_answers', JSON.stringify(answers));
+} catch (_) {
+  answers = {};
+  try { sessionStorage.removeItem('cg_check_answers'); } catch (_) {}
 }
+let snapshotShown = false;
+let previouslyFocusedElement = null;
 
 function getFocusableElements(container) {
   return [...container.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])')]
@@ -422,16 +425,47 @@ function getFocusableElements(container) {
 }
 
 function saveDraft() {
-  safeStorageSet(sessionStorage, 'cg_check_answers', JSON.stringify(answers));
+  sessionStorage.setItem('cg_check_answers', JSON.stringify(answers));
 }
 
-function openCheck(event) {
+// The sample answer on the homepage is a real answer to the matching
+// follow-up question later in the Growth Check, not a pretend lead submission.
+const previewInsights = {
+  always: 'That is a useful foundation. I would look at the consistency, timing and effectiveness of the follow-up, not just whether it happens.',
+  sometimes: 'There may be opportunities sitting between first interest and a decision. I would investigate where follow-up becomes inconsistent.',
+  rarely: 'When the next step depends on the person handling an enquiry, the customer experience can vary. I would examine the handover and follow-up process.',
+  unknown: 'Before recommending anything, I would establish what actually happens after an enquiry and whether the business can measure it.'
+};
+
+document.querySelectorAll('.preview-choice').forEach((button) => {
+  button.addEventListener('click', () => {
+    const value = button.dataset.followUp;
+    const insight = previewInsights[value];
+    if (!insight) return;
+    answers.follow_up = value;
+    saveDraft();
+    document.querySelectorAll('.preview-choice').forEach((option) => {
+      const active = option === button;
+      option.classList.toggle('selected', active);
+      option.setAttribute('aria-pressed', String(active));
+    });
+    const insightContainer = document.getElementById('preview-insight');
+    document.getElementById('preview-insight-text').textContent = insight;
+    insightContainer.hidden = false;
+    document.getElementById('preview-hint').hidden = true;
+    trackEvent('cg_preview_answer_selected', { answer_category: value });
+  });
+});
+document.getElementById('preview-next')?.addEventListener('click', () => {
+  trackEvent('cg_preview_to_check');
+  openCheck();
+});
+
+function openCheck() {
   previouslyFocusedElement = document.activeElement;
-  const source = event?.currentTarget?.dataset?.ctaLocation || 'site_cta';
   modal.classList.add('open');
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('check-open');
-  setModalBackgroundInert(true);
 
   if (questionIndex === -1 && !snapshotStage.classList.contains('active')) {
     questionIndex = 0;
@@ -442,7 +476,7 @@ function openCheck(event) {
     backButton.hidden = false;
   }
 
-  trackEvent('cg_check_opened', { source });
+  trackEvent('cg_check_opened', { source: 'site_cta' });
   window.setTimeout(() => {
     const focusables = getFocusableElements(modal);
     (focusables[0] || document.getElementById('check-close'))?.focus({ preventScroll: true });
@@ -452,10 +486,9 @@ function closeCheck() {
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden', 'true');
   document.body.classList.remove('check-open');
-  setModalBackgroundInert(false);
-  if (questionIndex >= 0 && !leadSubmitted) {
+  if (questionIndex >= 0 && !snapshotShown) {
     trackEvent('cg_check_closed', { question_number: questionIndex + 1 });
-  } else if (leadSubmitted && priceViewed && !auditRequested) {
+  } else if (snapshotShown && priceViewed && !auditCtaClicked) {
     trackEvent('cg_price_abandoned', { stage: 'price_viewed_no_request' });
   }
   if (previouslyFocusedElement && typeof previouslyFocusedElement.focus === 'function') {
@@ -706,7 +739,6 @@ function validateTextQuestion(q, input) {
     answers[q.id] = value;
   }
   saveDraft();
-  if (q.id === 'email') trackEvent('cg_contact_step_completed', { question_number: questionIndex + 1 });
   nextQuestion();
 }
 
@@ -725,24 +757,13 @@ function renderConsent() {
   stepLabel.textContent = 'Ready for your snapshot';
   form.innerHTML = `
     <div class="question-card">
-      <p class="question-kicker">BEFORE YOUR RESULT</p>
+      <p class="question-kicker">YOUR FREE SNAPSHOT</p>
       <h2 id="consent-title" tabindex="-1">I’ve got enough to know where I’d start looking.</h2>
-      <p class="question-help">I’ll send your answers directly to Laura first. Then your Commercial Growth Snapshot and the audit investment will appear on the next screen.</p>
-      <div class="honeypot-field" aria-hidden="true">
-        <label for="website-confirm">Leave this field empty</label>
-        <input type="text" id="website-confirm" name="_gotcha" tabindex="-1" autocomplete="off" />
-      </div>
-      <div class="consent-box">
-        <label class="consent-row">
-          <input type="checkbox" id="lead-consent" />
-          <span>I understand how my information will be used to respond to this business enquiry and I confirm I have not included sensitive personal data or confidential customer/staff records. This does not subscribe me to marketing. <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span>
-        </label>
-      </div>
-      <button class="button primary" id="submit-diagnostic" type="button">Show me what you’d investigate</button>
-      <p class="submit-status" id="submit-status" role="status"></p>
+      <p class="question-help">Your answers are used in this browser to generate a preliminary Growth Snapshot. They are not sent to Commercial Growth. If you'd like Laura to review your business, you can choose to send a separate enquiry through Tally afterwards.</p>
+      <p class="question-help">Please don't enter sensitive personal information or confidential customer records into the Check.</p>
+      <button class="button primary" id="submit-diagnostic" type="button">Show my Growth Snapshot</button>
     </div>`;
-
-  document.getElementById('submit-diagnostic').addEventListener('click', submitLead);
+  document.getElementById('submit-diagnostic').addEventListener('click', showLocalSnapshot);
   window.setTimeout(() => document.getElementById('consent-title')?.focus({ preventScroll: true }), 30);
 }
 
@@ -774,21 +795,6 @@ function scoreSnapshot() {
   if (answers.monthly_enquiries === '0-10' && !challenges.includes('acquisition')) score.acquisition += 2;
 
   return Object.entries(score).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([key]) => key);
-}
-
-function scoreLeadFit() {
-  let points = 0;
-  const challenges = Array.isArray(answers.challenge) ? answers.challenge : (answers.challenge ? [answers.challenge] : []);
-  if (['31-100', '100+'].includes(answers.monthly_enquiries)) points += 2;
-  else if (answers.monthly_enquiries === '11-30') points += 1;
-  if (['no', 'roughly'].includes(answers.conversion_visibility)) points += 1;
-  if (['sometimes', 'rarely', 'never', 'unknown'].includes(answers.follow_up)) points += 1;
-  if (['high', 'some'].includes(answers.repeat_potential)) points += 1;
-  if (answers.support_interest === 'implementation') points += 2;
-  if (answers.timeline === 'now') points += 2;
-  else if (answers.timeline === 'month') points += 1;
-  if (challenges.length >= 2) points += 1;
-  return points >= 6 ? 'A - high intent / strong fit' : points >= 3 ? 'B - warm / plausible fit' : 'C - early / exploratory';
 }
 
 function buildSnapshotReason(priorities) {
@@ -828,93 +834,17 @@ const areaCopy = {
   offer: ['REVENUE', 'Offer structure & revenue expansion']
 };
 
-function payloadToFormData(payload) {
-  const data = new FormData();
-  Object.entries(payload).forEach(([key, value]) => {
-    if (value === undefined || value === null) return;
-    data.append(key, Array.isArray(value) ? value.join(' | ') : String(value));
-  });
-  return data;
-}
-
-async function postToFormspree(endpoint, payload) {
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Accept': 'application/json' },
-    body: payloadToFormData(payload)
-  });
-  let responseBody = null;
-  try { responseBody = await response.json(); } catch (_) {}
-  if (!response.ok) {
-    const detail = responseBody?.errors?.map((item) => item.message).filter(Boolean).join('; ');
-    throw new Error(detail || `Formspree returned ${response.status}`);
-  }
-  return responseBody;
-}
-
-async function submitLead() {
-  const consentBox = document.getElementById('lead-consent');
-  const honeypot = document.getElementById('website-confirm');
-  const status = document.getElementById('submit-status');
-  const button = document.getElementById('submit-diagnostic');
-  if (honeypot?.value) {
-    status.textContent = 'Unable to submit this request.';
-    status.classList.add('error');
-    return;
-  }
-  if (!consentBox.checked) {
-    status.textContent = 'Please confirm the privacy acknowledgement before continuing.';
-    status.classList.add('error');
-    return;
-  }
-
-  const endpoint = (CONFIG.formEndpoint || '').trim();
-  if (!endpoint) {
-    status.innerHTML = `Lead delivery has not been connected yet. Please email <a href="mailto:${CONFIG.contactEmail || 'lauraqbusiness@gmail.com'}">${CONFIG.contactEmail || 'Laura'}</a> to test the live enquiry flow.`;
-    status.classList.add('error');
-    return;
-  }
-
-  button.disabled = true;
-  button.textContent = 'Sending your answers…';
-  status.textContent = '';
-  status.classList.remove('error');
-
+function showLocalSnapshot() {
   const priorities = scoreSnapshot();
-  const payload = {
-    _gotcha: '',
-    submission_type: 'commercial_growth_check',
-    _subject: `New Commercial Growth Check${answers.business ? ` - ${answers.business}` : ''}`,
-    ...answers,
-    lead_id: leadId,
-    stage: 'diagnostic_complete_price_reveal',
-    lead_priority: scoreLeadFit(),
-    priority_1: areaCopy[priorities[0]][1],
-    priority_2: areaCopy[priorities[1]][1],
-    priority_3: areaCopy[priorities[2]][1],
-    ...attribution,
-    page_path: window.location.pathname || '/',
-    submitted_at: new Date().toISOString()
-  };
-
-  try {
-    await postToFormspree(endpoint, payload);
-    leadSubmitted = true;
-    trackEvent('cg_diagnostic_completed', {
-      challenge: Array.isArray(answers.challenge) ? answers.challenge.join('|') : answers.challenge,
-      monthly_enquiries: answers.monthly_enquiries,
-      support_interest: answers.support_interest,
-      timeline: answers.timeline,
-      heard_from: answers.heard_from
-    });
-    showAnalysis(priorities);
-  } catch (error) {
-    button.disabled = false;
-    button.textContent = 'Try again';
-    trackEvent('cg_diagnostic_submit_failed', { question_count: questions.length });
-    status.textContent = 'Something did not send properly. Please try again, or contact Laura directly if it keeps happening.';
-    status.classList.add('error');
-  }
+  snapshotShown = true;
+  trackEvent('cg_diagnostic_completed', {
+    challenge: Array.isArray(answers.challenge) ? answers.challenge.join('|') : answers.challenge,
+    monthly_enquiries: answers.monthly_enquiries,
+    support_interest: answers.support_interest,
+    timeline: answers.timeline,
+    heard_from: answers.heard_from
+  });
+  showAnalysis(priorities);
 }
 
 function showAnalysis(priorities) {
@@ -925,12 +855,11 @@ function showAnalysis(priorities) {
   snapshotStage.classList.add('active');
   trackEvent('cg_analysis_started', { stage: 'post_diagnostic' });
 
-  const safeName = escapeHTML(answers.name || '');
   snapshotStage.innerHTML = `
     <div class="analysis-stage" role="status" aria-live="polite">
       <p class="eyebrow">COMMERCIAL GROWTH CHECK</p>
       <div class="analysis-orbit" aria-hidden="true"><span></span><span></span><span></span></div>
-      <h2>Analysing your responses${safeName ? `, ${safeName}` : ''}…</h2>
+      <h2>Analysing your responses…</h2>
       <p class="analysis-lead">I’m comparing the signals across demand, conversion, follow-up, repeat revenue and the customer journey to prioritise where I would look first.</p>
       <div class="analysis-list" aria-hidden="true">
         <div class="analysis-item active"><span>01</span><p>Reviewing demand & conversion signals</p></div>
@@ -963,13 +892,13 @@ function showSnapshot(priorities) {
     : '';
 
   const questionSubject = 'Question about Commercial Growth';
-  const questionBody = `Hi Laura,\n\nI’ve completed the Commercial Growth Check${answers.business ? ` for ${answers.business}` : ''} and I have a question before deciding on the Audit.\n\nMy question is:\n\n\nThanks,\n${answers.name || ''}`;
+  const questionBody = 'Hi Laura,\n\nI’ve completed the Commercial Growth Check and I have a question before deciding on the Audit.\n\nMy question is:\n\n\nThanks,';
 
   snapshotStage.innerHTML = `
     <div class="snapshot-top">
       <p class="eyebrow">YOUR COMMERCIAL GROWTH SNAPSHOT</p>
-      <h2 id="snapshot-title" tabindex="-1">${answers.name ? `${escapeHTML(answers.name)}, ` : ''}here’s where I would start.</h2>
-      <p class="snapshot-intro">Your answers have been compared across the commercial journey to surface the areas most worth investigating first.</p>
+      <h2 id="snapshot-title" tabindex="-1">Here’s where I would start.</h2>
+      <p class="snapshot-intro">Your answers have been compared across the commercial journey to surface the areas most worth investigating first. This snapshot stays in your browser and hasn't been sent to Laura.</p>
       <div class="snapshot-rationale"><span>WHY THESE AREAS SURFACED</span><p>${escapeHTML(tailoredReason)}</p></div>
       <p class="snapshot-disclaimer">This is an initial commercial snapshot, not a diagnosis. I would validate the causes against the real customer journey, process and performance data before recommending changes.</p>
     </div>
@@ -985,12 +914,12 @@ function showSnapshot(priorities) {
       </div>
       <div class="price-row">
         <span class="price-current">${CONFIG.auditLaunchPrice || '€349'}</span>
-        <span class="price-standard">Founding client rate · standard rate <s>${CONFIG.auditStandardPrice || '€495'}</s></span>
+        <span class="price-standard">Founding-client rate</span>
       </div>
       ${implementationNote}
-      <p class="request-note">Requesting an Audit does not take payment or create a contract. Fit, scope, fees and engagement terms are confirmed separately before paid work begins. <a href="terms.html" target="_blank" rel="noopener noreferrer">Terms</a> · <a href="refunds.html" target="_blank" rel="noopener noreferrer">Refund policy</a>.</p>
+      <p class="request-note">Enquiries open a separate Tally form. Your Check answers are not submitted automatically; to share detail, add a short note in the enquiry form. No payment is taken and no contract is created. <a href="terms.html" target="_blank" rel="noopener noreferrer">Terms</a> · <a href="refunds.html" target="_blank" rel="noopener noreferrer">Refund policy</a>.</p>
       <div class="snapshot-actions">
-        <button class="button primary" id="request-audit" type="button">Request my Audit</button>
+        <a class="button primary" id="request-audit" href="${tallyUrl('audit', priorities)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Enquire about an Audit ↗</a>
         <button class="button secondary" id="ask-question" type="button">I have a question first</button>
       </div>
       <button class="retake-check" id="retake-check" type="button">Start a fresh Check</button>
@@ -1002,7 +931,10 @@ function showSnapshot(priorities) {
   trackEvent('cg_snapshot_viewed', { priority_count: priorities.length });
   trackEvent('cg_price_viewed', { audit_price: (CONFIG.auditLaunchPrice || '349').replace(/\D/g, '') });
 
-  document.getElementById('request-audit').addEventListener('click', requestAudit);
+  document.getElementById('request-audit').addEventListener('click', () => {
+    auditCtaClicked = true;
+    trackEvent('cg_audit_enquiry_link_clicked', { placement: 'snapshot' });
+  });
   document.getElementById('ask-question').addEventListener('click', (event) => {
     event.preventDefault();
     trackEvent('cg_question_clicked');
@@ -1010,12 +942,10 @@ function showSnapshot(priorities) {
   });
   document.getElementById('retake-check')?.addEventListener('click', () => {
     answers = {};
-    safeStorageRemove(sessionStorage, 'cg_check_answers');
-    leadId = createLeadId();
-    safeStorageSet(sessionStorage, 'cg_lead_id', leadId);
-    leadSubmitted = false;
+    sessionStorage.removeItem('cg_check_answers');
+    snapshotShown = false;
     priceViewed = false;
-    auditRequested = false;
+    auditCtaClicked = false;
     questionIndex = 0;
     snapshotStage.classList.remove('active');
     snapshotStage.innerHTML = '';
@@ -1024,41 +954,4 @@ function showSnapshot(priorities) {
     renderQuestion();
     trackEvent('cg_check_restarted');
   });
-}
-
-async function requestAudit() {
-  const button = document.getElementById('request-audit');
-  const box = document.getElementById('intent-confirmation');
-  const endpoint = (CONFIG.formEndpoint || '').trim();
-  button.disabled = true;
-  button.textContent = 'Sending…';
-
-  try {
-    if (endpoint) {
-      await postToFormspree(endpoint, {
-        submission_type: 'audit_request',
-        _subject: `Commercial Growth Audit request${answers.business ? ` - ${answers.business}` : ''}`,
-        lead_id: leadId,
-        stage: 'audit_requested',
-        lead_priority: scoreLeadFit(),
-        name: answers.name,
-        business: answers.business,
-        email: answers.email,
-        support_interest: answers.support_interest,
-        timeline: answers.timeline,
-        submitted_at: new Date().toISOString()
-      });
-    }
-    auditRequested = true;
-    trackEvent('cg_audit_requested', { support_interest: answers.support_interest, timeline: answers.timeline });
-    box.className = 'intent-confirmation';
-    box.innerHTML = '<strong>Your Audit request is in.</strong><span>Laura already has your Commercial Growth Check answers and will come back to you about the best next step.</span>';
-    button.textContent = 'Audit requested ✓';
-  } catch (error) {
-    trackEvent('cg_audit_request_failed');
-    button.disabled = false;
-    button.textContent = 'Request my Audit';
-    box.className = 'intent-confirmation';
-    box.innerHTML = `Something did not send properly. Please email <a href="mailto:${CONFIG.contactEmail || 'lauraqbusiness@gmail.com'}?subject=${encodeURIComponent('Commercial Growth Audit enquiry')}&body=${encodeURIComponent('Hi Laura,\n\nI tried to request a Commercial Growth Audit but the form did not send properly.\n\nThanks,\n' + (answers.name || ''))}">Laura directly</a>.`;
-  }
 }

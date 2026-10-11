@@ -1,87 +1,57 @@
-# Commercial Growth V11 — legal, privacy, accessibility and launch hardening
+# Commercial Growth — Complete Website V1.6
 
-This build includes the V10 acquisition funnel plus a legal/privacy/accessibility hardening pass for `commercialgrowth.ie`.
+Consolidates the V1.3 editorial site, V1.5 legal/Tally pages, the free in-browser Growth Check and Commercial Growth Intelligence scanner V0.2.
 
-## Included in this build
-- Commercial Growth Check and Formspree lead delivery.
-- GA4 `G-5PNH8XMW8N`, blocked until the visitor actively allows analytics.
-- Analytics withdrawal now disables further tracking and attempts to remove first-party GA cookies.
-- Analytics consent expires after no more than six months so the visitor is asked again.
-- GA cookies are configured for a maximum 90-day expiry with no rolling renewal.
-- UTM/source attribution is kept in page memory only and attached to a lead only when the Check is submitted; it is not written to browser storage.
-- Free-text and URL fields have length limits and the public business link is optional.
-- The Check warns users not to provide sensitive personal data or confidential customer/staff information.
-- Required privacy acknowledgement before submitting the Check.
-- Honeypot field for basic bot resistance.
-- Keyboard-accessible modal with focus trapping and focus restoration.
-- Text inputs are programmatically associated with their question headings.
-- Single-choice questions now require an explicit Continue action instead of unexpected auto-advance.
-- Minimum interactive target sizes preserved at approximately 44px on mobile.
-- Contrast-safe darker accent for small text and focus states.
-- Third-party Google Fonts removed; the site now uses local/system font stacks.
-- No embedded social feeds, videos, maps or advertising pixels.
-- Legal pages added: Privacy, Cookies, Terms, Refunds, Accessibility.
-- Footer legal links and business-operator disclosure added.
-- Claims softened to avoid presenting the free Check as a diagnosis or promising outcomes.
+**Status:** Local scanner development and automated integration tests pass. **Not publicly deployed.** Live deployment requires a Cloudflare account, Turnstile configuration, provider/legal checks and a real browser test on the user's laptop. Do not push to GitHub until verified.
 
-## Legal pages
-- `privacy.html`
-- `cookies.html`
-- `terms.html`
-- `refunds.html`
-- `accessibility.html`
+## Local preview — two PowerShell terminals
 
-These pages are practical website policies, not a substitute for an Irish solicitor reviewing your final client engagement agreement.
+Terminal 1 (website; if already running, leave it running):
 
-## Owner actions still required outside the code
+```powershell
+Set-Location "C:\Users\laura\Projects\Commercial Growth"
+npx.cmd --yes http-server . -p 8000 -c-1
+```
 
-### 1. Geographic business/service address
-Irish e-commerce rules can require a service provider to make its geographic establishment address easily and permanently accessible. This build does **not** invent or publish a residential address. Before relying on the website commercially, establish a genuine non-residential business/service address that you are legally entitled to use, then add it to the Terms/business details and other required pre-contract information.
+Terminal 2 (scanner engine):
 
-### 2. Business-name registration
-If carrying on business in Ireland as `Commercial Growth`, register the business name with the CRO when required. Add the registration number/details to the site once issued.
+```powershell
+Set-Location "C:\Users\laura\Projects\Commercial Growth\scanner-worker"
+node --test test/*.test.js
+npx.cmd --yes wrangler dev --local --port 8787
+```
 
-### 3. Formspree account settings
-In Formspree:
-- enable **Restrict to Domain** for `commercialgrowth.ie`;
-- review/accept the processor/DPA terms available to your account;
-- regularly delete old test and enquiry submissions in line with the retention policy;
-- optionally enable Cloudflare Turnstile if spam becomes a problem.
+Open http://127.0.0.1:8787/health — expect JSON with `ok:true`. In another tab open http://127.0.0.1:8000 and try a public business homepage. For the local preview, Cloudflare Turnstile is skipped because the Worker is accessible on localhost. The public Worker requires Turnstile and rate-limit bindings.
 
-### 4. Google Analytics settings
-For privacy minimisation, review the Commercial Growth GA4 property and:
-- keep Google Signals / advertising personalisation disabled;
-- set user/event data retention to the shortest useful period (for example 2 months);
-- consider disabling granular location/device collection where you do not need it;
-- disable Enhanced Measurement **Form interactions** because the site already has purpose-built funnel events and does not need Google to auto-detect form activity;
-- do not link Google Ads unless the cookie/privacy setup is reviewed again first.
+If npx asks to install Wrangler, accept. Ctrl+C stops the engine. If port 8787 is in use, stop the older Worker first. Run `node --version` if there are Wrangler install errors.
 
-### 5. Client engagement agreement
-Before accepting paid work, use a separate written engagement agreement covering scope, fees, payment schedule, confidentiality, client responsibilities, intellectual property, cancellation/refunds, limitation of liability, no guaranteed commercial result, termination and governing law. Website Terms alone should not be used as the consultancy contract.
+## Live release — no shortcuts
 
-### 6. If online checkout is added later
-Do not add online payment or one-click contracting without another legal review. Consumer-facing distance-contract rules can require extra trader details, telephone/contact information, cancellation information and durable-medium confirmation. The current site deliberately does not take payment or conclude a contract online.
+**Before public launch:**
 
-## Deployment
-1. Extract the ZIP.
-2. Upload the individual files inside this folder to the **root** of the Commercial Growth GitHub repository.
-3. Keep `CNAME` in the root.
-4. Commit the changes.
-5. Test in a private/incognito browser on mobile and desktop.
+1. Confirm Cloudflare Workers customer terms/DPA/subprocessors and data-transfer arrangements applicable to your account. Review `privacy.html` and test consent choices; confirm that the scanner's technical logs and retention are documented. Check whether `workers.dev` is acceptable for a limited pilot; Cloudflare recommends a custom domain/route for production.
+2. In the Cloudflare dashboard create a free Turnstile widget for **commercialgrowth.ie** and **www.commercialgrowth.ie**. Keep the **secret** private; the **site key** is public.
+3. In `scanner-worker`, run `npx.cmd --yes wrangler login`, then `npx.cmd --yes wrangler secret put TURNSTILE_SECRET`. Paste the secret when Wrangler prompts. Do **not** place the secret in `config.js`, any ZIP, email or GitHub.
+4. Run `npx.cmd --yes wrangler deploy` in `scanner-worker` to publish the separate Worker. The Wrangler configuration includes a per-visitor and a global rate-limit binding. Check `https://<your-worker>.<your-subdomain>.workers.dev/health`: `ready:true` must appear before the public scanner is connected. A health reply alone does not confirm every security/privacy requirement.
+5. In the website `config.js` set `scannerEndpoint` to the **HTTPS worker origin** (without `/scan`) for public use and put the Turnstile **site key** in `turnstileSiteKey`. **Keep the local-preview conditional** so the local site still uses `http://127.0.0.1:8787`.
+6. Test the live endpoint through commercialgrowth.ie only: valid homepage, a blocked robots.txt site, a local IP rejection, challenge retry, rate limits, mobile width, broken/unavailable Worker, and local analytics consent. Only then commit and push the site.
 
-## Launch QA
-- Reject analytics and confirm no `_ga` cookies appear.
-- Allow analytics and confirm Realtime receives a test visit.
-- Reopen Privacy choices and reject analytics; confirm tracking stops and GA cookies are removed where the browser permits.
-- Complete a fresh Commercial Growth Check and confirm the Formspree submission arrives.
-- Test all legal-page links.
-- Complete the Check using keyboard only (Tab, Shift+Tab, Enter/Space, Escape).
-- Zoom browser text to 200% and check that content remains readable and operable.
-- Test with reduced-motion enabled if available.
-- Confirm no personal location/address appears anywhere until a compliant business service address is intentionally added.
+This scanner analyses **only HTML that can be fetched without authentication**. It does not execute JavaScript, read analytics, diagnose conversion rates, or prove lost revenue. Some websites block automated access or exceed limits. The public scanner is hidden on production until both an endpoint and a site key are configured.
 
+## Security considerations
 
-## V12 updates
-- Replaced the top-bar “Take the Check” CTA with the warmer “Find the gaps”.
-- Added an in-app-browser-safe email handoff: Instagram/TikTok/Facebook open a pre-addressed Gmail draft; normal mobile browsers use the device mail composer; desktop opens Gmail compose.
-- Email links use a Gmail HTTPS fallback so a blocked mailto link does not produce “link cannot be loaded”.
+- CORS and JavaScript validation are NOT security boundaries; the Worker also validates input, checks DNS responses for public addresses, reads robots.txt and caps output size.
+- Rate-limit counters are eventually consistent. They are not strict request quotas. For heavier usage, add WAF/Turnstile rules and observe logs; don't assume the free tier has unlimited usage.
+- DNS may change between checking an address and connecting. This code reduces SSRF exposure but cannot guarantee protection against every network-level attack; provider network egress controls and a dedicated security review remain important.
+- No page snapshot database is used by this prototype. Operational logs from Cloudflare and the scanned site's server may still contain the requested URL and IP information.
+- `TURNSTILE_SECRET` MUST be set in the Worker before any public scans can occur. The Worker fails closed without its secret or rate-limit bindings.
+
+## Project files
+
+- `index.html`, `styles.css`, `script.js`, `config.js` — website, Growth Check, legal and Tally presentation
+- `scanner.js` — scanner UI and Turnstile verification token integration
+- `scanner-worker/index.js`, `analyse.js`, `security.js`, `wrangler.toml` — Cloudflare Worker scanner backend
+- `scanner-worker/test` — Node 22 tests (no external dependencies)
+- `privacy.html`, `cookies.html`, `terms.html`, `refunds.html`, `accessibility.html` — website policies
+
+**No GitHub push or production Cloudflare deployment occurs by extracting this package.**
