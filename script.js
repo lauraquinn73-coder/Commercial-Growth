@@ -149,6 +149,8 @@ function trackEvent(name, details = {}) {
   // Event details must stay categorical/aggregate. Never add PII or free-text here.
   window.gtag('event', name, details);
 }
+// Exposes only categorical event reporting. Never pass a website URL or answer here.
+window.CG_trackEvent = trackEvent;
 
 const cookieBanner = document.getElementById('cookie-banner');
 const privacyChoicesButton = document.getElementById('privacy-choices');
@@ -221,46 +223,17 @@ document.getElementById('cookie-essential')?.addEventListener('click', () => {
   hidePrivacyChoices();
 });
 
-// Cross-device email handoff. Instagram and other in-app browsers often block
-// mailto: navigation, so they are sent to a pre-addressed Gmail compose screen instead.
-// Normal mobile browsers can still hand off to the device mail app; desktop opens Gmail.
-function isMobileMailDevice() {
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) ||
-    (navigator.maxTouchPoints > 1 && /Macintosh/i.test(navigator.userAgent));
+// No visitor answers or sensitive business notes are ever placed in a URL.
+// The optional copy action is triggered separately by the visitor.
+function openEmailDraft(subject) {
+  const to=CONFIG.contactEmail||'lauraqbusiness@gmail.com';
+  const href=`mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}`;
+  const link=document.createElement('a');link.href=href;link.style.display='none';
+  document.body.append(link);link.click();link.remove();
 }
-
-function isInAppBrowser() {
-  return /Instagram|FBAN|FBAV|FB_IAB|TikTok|Line\//i.test(navigator.userAgent);
-}
-
-function buildMailDraft(subject, body) {
-  const to = CONFIG.contactEmail || 'lauraqbusiness@gmail.com';
-  const mailto = `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  const gmail = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  return { mailto, gmail };
-}
-
-function openEmailDraft(subject, body) {
-  const draft = buildMailDraft(subject, body);
-
-  if (isInAppBrowser()) {
-    // HTTPS is reliably loadable inside Instagram/TikTok/Facebook browsers.
-    window.location.href = draft.gmail;
-    return;
-  }
-
-  if (isMobileMailDevice()) {
-    const link = document.createElement('a');
-    link.href = draft.mailto;
-    link.style.display = 'none';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    return;
-  }
-
-  const opened = window.open(draft.gmail, '_blank', 'noopener');
-  if (!opened) window.location.href = draft.gmail;
+async function copyPrivateSummary(value){
+  try {await navigator.clipboard.writeText(value);return true;}
+  catch {return false;}
 }
 
 const generalEmailSubject = 'Commercial Growth enquiry';
@@ -417,6 +390,15 @@ try {
   try { sessionStorage.removeItem('cg_check_answers'); } catch (_) {}
 }
 let snapshotShown = false;
+// Temporary memory-only handoff from a scan; not stored in analytics or sent to us.
+window.CG_prefillBusinessUrl = function(url) {
+  try {
+    const u=new URL(url);
+    if(u.protocol!=='https:' || u.search || u.hash || u.username || u.password) return;
+    answers.business_url=u.origin+'/';
+    saveDraft();
+  } catch (_) {}
+};
 let previouslyFocusedElement = null;
 
 function getFocusableElements(container) {
@@ -496,6 +478,7 @@ function closeCheck() {
   }
 }
 
+window.CG_openCheck = openCheck;
 document.querySelectorAll('.js-open-check').forEach((button) => button.addEventListener('click', openCheck));
 document.getElementById('check-close')?.addEventListener('click', closeCheck);
 modal?.addEventListener('click', (e) => { if (e.target === modal) closeCheck(); });
@@ -743,6 +726,7 @@ function validateTextQuestion(q, input) {
 }
 
 function nextQuestion() {
+  trackEvent('cg_check_step_completed',{question_number: questionIndex+1, question_id:questions[questionIndex]?.id});
   if (questionIndex < questions.length - 1) {
     questionIndex += 1;
     renderQuestion();
@@ -922,6 +906,12 @@ function showSnapshot(priorities) {
         <a class="button primary" id="request-audit" href="${tallyUrl('audit', priorities)}" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Enquire about an Audit ↗</a>
         <button class="button secondary" id="ask-question" type="button">I have a question first</button>
       </div>
+      <section class="share-snapshot" aria-label="Share your Growth Check findings">
+        <h3>Want me to see what you've found?</h3>
+        <p>Your answers remain on your device unless you choose to share them. You can send me your snapshot directly without filling out the Check again.</p>
+        <button class="button secondary" id="share-by-email" type="button">Copy my summary to share by email</button>
+        <div id="direct-share-area" hidden></div>
+      </section>
       <button class="retake-check" id="retake-check" type="button">Start a fresh Check</button>
       <div id="intent-confirmation"></div>
     </div>`;
@@ -931,6 +921,25 @@ function showSnapshot(priorities) {
   trackEvent('cg_snapshot_viewed', { priority_count: priorities.length });
   trackEvent('cg_price_viewed', { audit_price: (CONFIG.auditLaunchPrice || '349').replace(/\D/g, '') });
 
+  document.getElementById('share-by-email')?.addEventListener('click',async()=>{
+    const summary=questions.map(q=>{
+      const raw=answers[q.id];
+      const value=Array.isArray(raw)?raw.join(', '):String(raw||'(not provided)');
+      return q.title+'\n'+value;
+    }).join('\n\n');
+    const text='Priority areas: '+priorities.join(', ')+'\n\n'+summary;
+    const copied=await copyPrivateSummary(text);
+    const button=document.getElementById('share-by-email');
+    if(copied){
+      button.textContent='Copied — open your email and paste the summary';
+      trackEvent('cg_snapshot_summary_copied');
+      // Only a generic subject and recipient go to the visitor's email app.
+      openEmailDraft('Commercial Growth Check enquiry');
+    } else {
+      button.textContent='Clipboard unavailable — use your own email, or the direct-share form';
+    }
+  });
+  enableDirectShare(priorities);
   document.getElementById('request-audit').addEventListener('click', () => {
     auditCtaClicked = true;
     trackEvent('cg_audit_enquiry_link_clicked', { placement: 'snapshot' });
@@ -938,7 +947,7 @@ function showSnapshot(priorities) {
   document.getElementById('ask-question').addEventListener('click', (event) => {
     event.preventDefault();
     trackEvent('cg_question_clicked');
-    openEmailDraft(questionSubject, questionBody);
+    openEmailDraft(questionSubject);
   });
   document.getElementById('retake-check')?.addEventListener('click', () => {
     answers = {};
@@ -953,5 +962,108 @@ function showSnapshot(priorities) {
     backButton.hidden = true;
     renderQuestion();
     trackEvent('cg_check_restarted');
+  });
+}
+
+
+// Secure, optional D1 lead submission. If the private Worker database is not
+// configured, the email handoff above still works and no form is displayed.
+async function enableDirectShare(priorities) {
+  const area=document.getElementById('direct-share-area');
+  if(!area) return;
+  const cfg=window.CG_CONFIG||{};
+  const endpoint=String(cfg.scannerEndpoint||'').trim().replace(/\/$/,'');
+  const key=String(cfg.turnstileSiteKey||'').trim();
+  if(!endpoint || !key) return;
+  const local=['localhost','127.0.0.1'].includes(location.hostname) && location.port==='8000' && endpoint==='http://127.0.0.1:8787';
+  const production=/^https:\/\/[a-z0-9.-]+(?::443)?$/i.test(endpoint) && /^[a-z0-9_-]{12,}$/i.test(key);
+  if(!local && !production) return;
+  try {
+    const capability=await fetch(endpoint+'/capabilities',{credentials:'omit',referrerPolicy:'no-referrer'});
+    const data=await capability.json();
+    if(!capability.ok || !data.leadSharing || !area.isConnected) return;
+  } catch {return;}
+  area.hidden=false;
+  area.innerHTML=`<form class="share-form" id="share-check-form" novalidate>
+    <h4>Share privately with Commercial Growth</h4>
+    <p class="question-help">Only send business information you are authorised to share. Laura will receive your answers, website link (if provided), focus areas and contact details. No marketing subscription.</p>
+    <label for="share-name">Your name</label><input id="share-name" name="name" autocomplete="name" maxlength="80" required />
+    <label for="share-business">Business name</label><input id="share-business" name="business" maxlength="120" autocomplete="organization" required />
+    <label for="share-email">Email address</label><input id="share-email" type="email" name="email" maxlength="254" autocomplete="email" required />
+    <label class="share-consent"><input id="share-approval" type="checkbox" required /> <span>I am authorised to share these details and choose to send my contact details and Growth Check answers to Commercial Growth for a personal response, as explained in the <a href="privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</span></label>
+    <div id="share-turnstile"></div>
+    <button class="button primary" id="share-submit" type="submit">Send my findings securely →</button>
+    <div id="share-feedback" role="status" aria-live="polite"></div>
+  </form>`;
+  const form=area.querySelector('form');
+  const feedback=area.querySelector('#share-feedback');
+  let token='',widget=null;
+  if(production) {
+    // Re-use Turnstile script loaded by the scanner, if present.
+    async function loadWidget() {
+      if(!window.turnstile) {
+        const existing=document.querySelector('script[src*="challenges.cloudflare.com/turnstile/v0/api.js"]');
+        if(!existing) {
+          const script=document.createElement('script');
+          script.src='https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
+          script.async=true;
+          document.head.append(script);
+        }
+        for(let i=0;i<40 && !window.turnstile;i++) await new Promise(resolve=>setTimeout(resolve,100));
+      }
+      if(window.turnstile && area.isConnected) {
+        widget=window.turnstile.render(area.querySelector('#share-turnstile'),{
+          sitekey:key,action:'cg_lead',theme:'light',size:'flexible',appearance:'interaction-only',
+          callback:value=>{token=value;},'expired-callback':()=>{token='';},'error-callback':()=>{token='';}
+        });
+      } else feedback.textContent='Verification is unavailable. You can share your findings by email instead.';
+    }
+    loadWidget();
+  }
+  form.addEventListener('submit',async e=>{
+    e.preventDefault();
+    if(!form.reportValidity()) return;
+    if(production && !token) {feedback.textContent='Please complete the security verification first.';return;}
+    const button=area.querySelector('#share-submit');
+    button.disabled=true;
+    feedback.textContent='Sending your findings securely…';
+    try {
+      const controller=new AbortController();
+      const timeout=setTimeout(()=>controller.abort(),20000);
+      let response;
+      try {
+        response=await fetch(endpoint+'/lead',{method:'POST',mode:'cors',credentials:'omit',referrerPolicy:'no-referrer',
+          headers:{'Content-Type':'application/json'},signal:controller.signal,
+          body:JSON.stringify({name:form.elements.name.value,business:form.elements.business.value,email:form.elements.email.value,
+            answers,priorities,shareConsent:form.querySelector('#share-approval').checked,privacyVersion:'2026-10-11-v17-privacy2',
+            ...(production?{turnstileToken:token}:{})})});
+      } finally {clearTimeout(timeout);}
+      const data=await response.json();
+      if(!response.ok || data.ok!==true) throw new Error(data.error||'The submission could not be completed.');
+      feedback.replaceChildren();
+      const message=document.createElement('p');message.textContent='Your findings were submitted. Keep this private deletion code to withdraw the submitted record. Anyone with the code can delete it.';
+      const code=document.createElement('code');code.textContent=data.withdrawalCode||'';code.style.overflowWrap='anywhere';
+      const copy=document.createElement('button');copy.type='button';copy.className='button secondary';copy.textContent='Copy deletion code';
+      copy.addEventListener('click',async()=>{copy.textContent=await copyPrivateSummary(data.withdrawalCode)?'Code copied':'Please select and copy the code';});
+      const erase=document.createElement('button');erase.type='button';erase.className='button secondary';erase.textContent='Delete my submitted findings';
+      erase.addEventListener('click',async()=>{
+        erase.disabled=true;
+        try{
+          const r=await fetch(endpoint+'/withdraw',{method:'POST',mode:'cors',credentials:'omit',referrerPolicy:'no-referrer',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:data.withdrawalCode})});
+          if(!r.ok) throw Error('Deletion unavailable. Use your code in our Privacy Policy deletion form.');
+          message.textContent='Deletion request processed. Your submitted findings have been removed from the database.';
+          code.remove();copy.remove();erase.remove();
+        }catch(error){message.textContent=error.message;erase.disabled=false;}
+      });
+      feedback.append(message,code,copy,erase);
+      form.querySelectorAll('input,button').forEach(el=>el.disabled=true);
+      trackEvent('cg_snapshot_shared',{method:'direct'});
+      try {sessionStorage.removeItem('cg_check_answers');}catch(_){}
+    } catch (error) {
+      feedback.textContent=error?.message||'Submission unavailable. You can use the email option instead.';
+      button.disabled=false;
+      if(widget!==null && window.turnstile) {try{window.turnstile.reset(widget);}catch{}}
+      token='';
+    }
   });
 }

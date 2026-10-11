@@ -22,7 +22,7 @@
   <title>Commercial Growth | Commercial Audits & Consultancy</title>
 
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
-  <link rel="stylesheet" href="styles.css?v=20261010-v16" />
+  <link rel="stylesheet" href="styles.css?v=20261011-v17c" />
 
   <script type="application/ld+json">
   {
@@ -38,13 +38,14 @@
     "sameAs": ["https://www.instagram.com/commercialgrowth.ie/"]
   }
   </script>
+<link rel="stylesheet" href="/bottom-refinement.css?v=20261011" />
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to content</a>
 
   <header class="site-header" id="top">
     <a class="brand" href="#top" aria-label="Commercial Growth home">
-      <img class="brand-logo" src="favicon.svg?v=20260909-v12" alt="" aria-hidden="true" />
+      <img src="/logo-cg.png" alt="" aria-hidden="true" class="brand-logo" />
       <span class="brand-text">Commercial Growth<span>.ie</span></span>
     </a>
 
@@ -70,7 +71,7 @@
           <button class="button primary js-open-check" type="button">Find your gaps <span aria-hidden="true">↗</span></button>
           <a href="#scanner" class="button secondary" data-scanner-link hidden>Try the website scanner <span aria-hidden="true">→</span></a>
         </div>
-        <p class="micro-proof"><span aria-hidden="true">✳</span> Start with a free check. No commitment, no guesswork.</p>
+        <p class="micro-proof"> Start with a free check. No commitment, no guesswork.</p>
       </div>
       <aside class="hero-visual reveal delay" aria-label="Illustration of a customer journey with opportunities to improve">
         <div class="journey-topline"><span>THE CUSTOMER JOURNEY</span><span>CG / 001</span></div>
@@ -118,7 +119,12 @@
               <input id="scanner-url" name="website" type="text" inputmode="url" autocomplete="url" placeholder="www.examplebusiness.ie" required maxlength="250" spellcheck="false" />
               <button class="button primary" id="scanner-submit" type="submit">Analyse website <span aria-hidden="true">→</span></button>
             </div>
-            <p class="scanner-field-help">Use a publicly accessible website. No passwords, dashboards or private links.</p>
+            <p class="scanner-field-help">Use a publicly accessible HTTPS homepage (for example, example.ie). The scanner does not access private data or verify sales performance.</p>
+            <p class="scanner-field-help">Your website address is processed to produce this report. We only keep a scan record if you choose the optional sharing setting below. <a href="privacy.html">How your information is used</a>.</p>
+            <label class="scanner-optin" id="scanner-optin-wrap" hidden>
+              <input type="checkbox" id="scanner-log-consent" />
+              <span>I own, manage or am authorised to share this website and choose to save its domain and broad scan categories for up to 30 days to improve the service. Optional — I can scan without saving. I will receive a private deletion code.</span>
+            </label>
           </form>
           <div id="scanner-verification" class="scanner-verification" hidden></div>
           <div id="scanner-status" class="scanner-status" aria-live="polite" role="status"></div>
@@ -216,7 +222,7 @@
     </section>
 
     <section id="about" class="section about" aria-labelledby="about-title">
-      <div class="about-monogram reveal" aria-hidden="true"><img src="favicon.svg?v=20260909-v12" alt="" /></div>
+
       <div class="section-heading reveal">
         <p class="eyebrow">ABOUT COMMERCIAL GROWTH</p>
         <h2 id="about-title" class="about-title">Built around one question:<span>Where is the opportunity?</span></h2>
@@ -257,42 +263,79 @@
       </div>
     </section>
 
-    <section id="contact" class="contact reveal" aria-labelledby="contact-title">
-      <p class="eyebrow">CURIOUS?</p>
-      <h2 id="contact-title">Find out what I would look at first.</h2>
-      <p>Take the free Growth Check. In around 2 to 3 minutes, you can see which commercial questions are worth asking next.</p>
-      <div class="contact-actions">
-        <button class="button primary js-open-check" type="button">Find the gaps</button>
-        <a class="button secondary contact-enquiry" id="contact-enquiry" href="https://tally.so/r/WOGzKv" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Send an enquiry ↗</a>
-        <a class="button soft contact-instagram" id="contact-instagram" href="https://www.instagram.com/commercialgrowth.ie/" target="_blank" rel="noopener noreferrer">Message me on Instagram</a>
+    <section id="contact" class="contact contact-refined reveal" aria-labelledby="contact-title">
+  <div class="contact-refined-inner">
+    <div class="contact-refined-intro">
+      <p class="eyebrow">YOUR NEXT STEP</p>
+      <h2 id="contact-title">Find the gaps.<br><em>See what's possible.</em></h2>
+      <p class="contact-refined-lede">Start with the free Commercial Growth Check. In around 2–3 minutes, explore which commercial questions are worth asking next.</p>
+      <p class="contact-refined-assurance"><span class="contact-refined-dot" aria-hidden="true"></span>No commitment. No guesswork. Just a clearer place to start.</p>
+    </div>
+    <div class="contact-refined-panel">
+      <p class="contact-refined-panel-label">LET'S GET STARTED</p>
+      <h3>Choose how you'd like to begin.</h3>
+      <div class="contact-actions contact-refined-actions">
+        <button class="button primary js-open-check" type="button">Start the free Growth Check <span aria-hidden="true">↗</span></button>
+        <a class="button secondary contact-enquiry" id="contact-enquiry" href="https://tally.so/r/WOGzKv" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Send an enquiry <span aria-hidden="true">↗</span></a>
       </div>
-      <p class="contact-choice">Prefer email? Write to <a href="mailto:lauraqbusiness@gmail.com">lauraqbusiness@gmail.com</a>. The enquiry form opens securely on Tally.</p>
-      <p class="contact-note">Commercial Growth is operated by Laura Quinn. Paid work begins only after scope, fees and engagement terms are agreed in writing.</p>
-    </section>
+      <p class="contact-refined-secondary">Or reach me directly: <a href="mailto:lauraqbusiness@gmail.com">Email</a> <span aria-hidden="true">·</span> <a id="contact-instagram" href="https://www.instagram.com/commercialgrowth.ie/" target="_blank" rel="noopener noreferrer">Instagram</a></p>
+      <p class="contact-refined-fineprint">The enquiry form opens securely on Tally. Paid work begins only after scope, fees and terms are agreed in writing.</p>
+    </div>
+  </div>
+</section>
   </main>
 
-  <footer>
-    <div class="footer-brand">Commercial Growth<span>.ie</span></div>
-    <p>Sales • Conversion • Retention • Customer Journey</p>
+  <footer class="cg-footer" aria-label="Website footer">
+  <div class="cg-footer-main">
+    <div class="cg-footer-identity">
+      <a class="cg-footer-logo" href="#top" aria-label="Commercial Growth — back to top">
+        <img src="/logo-cg.png" alt="" width="54" height="54" loading="lazy" />
+        <span>Commercial Growth<span class="cg-footer-ie">.ie</span></span>
+      </a>
+      <p>Commercial clarity, from the first enquiry to the next opportunity.</p>
+    </div>
+    <nav class="cg-footer-nav" aria-label="Footer navigation">
+      <div class="cg-footer-column">
+        <h3>Explore</h3>
+        <a href="#top">Home</a>
+        <a href="/about.html">About</a>
+        <a href="/resources.html">Resources</a>
+      </div>
+      <div class="cg-footer-column">
+        <h3>Services</h3>
+        <a href="#scanner">Website scanner</a>
+        <a href="#audit">Commercial audit</a>
+        <a href="#consultancy">Consultancy</a>
+      </div>
+      <div class="cg-footer-column">
+        <h3>Connect</h3>
+        <a id="footer-email" href="mailto:lauraqbusiness@gmail.com?subject=Commercial%20Growth%20enquiry">Email</a>
+        <a href="https://www.instagram.com/commercialgrowth.ie/" target="_blank" rel="noopener noreferrer">Instagram <span aria-hidden="true">↗</span></a>
+        <a href="#contact">Enquiries</a>
+      </div>
+    </nav>
+  </div>
+  <div class="cg-footer-bottom">
     <p class="legal-identity">Commercial Growth is the registered business name of Laura Quinn, sole trader. CRO registered business name no. 794953. Ballyea, Ballina, County Tipperary, Ireland.</p>
-    <p class="footer-links">
-      <a id="footer-email" href="mailto:lauraqbusiness@gmail.com?subject=Commercial%20Growth%20enquiry">Email</a>
-      <span aria-hidden="true">•</span> <a href="privacy.html">Privacy</a>
-      <span aria-hidden="true">•</span> <a href="cookies.html">Cookies</a>
-      <span aria-hidden="true">•</span> <a href="terms.html">Terms</a>
-      <span aria-hidden="true">•</span> <a href="refunds.html">Refunds</a>
-      <span aria-hidden="true">•</span> <a href="accessibility.html">Accessibility</a>
-      <span aria-hidden="true">•</span> <button class="footer-privacy-button" id="privacy-choices" type="button">Privacy choices</button>
-      <span aria-hidden="true">•</span> © <span id="year"></span> Commercial Growth
-    </p>
-  </footer>
+    <nav class="cg-footer-legal" aria-label="Legal and privacy links">
+      <a href="/privacy.html">Privacy</a>
+      <a href="/cookies.html">Cookies</a>
+      <a href="/terms.html">Terms</a>
+      <a href="/refunds.html">Refunds</a>
+      <a href="/disclaimer.html">Disclaimer</a>
+      <a href="/accessibility.html">Accessibility</a>
+      <button class="footer-privacy-button" id="privacy-choices" type="button">Privacy choices</button>
+    </nav>
+    <div class="cg-footer-copy">© <span id="year"></span> Commercial Growth <span aria-hidden="true">·</span> Sales · Conversion · Retention · Customer Journey</div>
+  </div>
+</footer>
 
   <!-- Commercial Growth Check -->
   <div class="check-modal" id="growth-check" aria-hidden="true">
     <div class="check-shell" role="dialog" aria-modal="true" aria-labelledby="check-modal-title">
       <div class="check-header">
         <a class="brand check-brand" href="#top" aria-label="Commercial Growth home">
-          <img class="brand-logo" src="favicon.svg?v=20260909-v12" alt="" aria-hidden="true" />
+          <img src="/logo-cg.png" alt="" aria-hidden="true" class="brand-logo" />
           <span class="brand-text">Commercial Growth<span>.ie</span></span>
         </a>
         <button class="check-close" id="check-close" type="button" aria-label="Close Commercial Growth Check">×</button>
@@ -322,7 +365,7 @@
   </div>
 
   <script src="config.js?v=20261010-v16"></script>
-  <script src="script.js?v=20261010-v16"></script>
-  <script src="scanner.js?v=20261010-v16" defer></script>
+  <script src="script.js?v=20261011-v17c"></script>
+  <script src="scanner.js?v=20261011-v17c" defer></script>
 </body>
 </html>

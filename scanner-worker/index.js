@@ -1,10 +1,12 @@
 import { assessHomepage, validatePublicHomepage } from './analyse.js';
 import { isPublicIPv4, isPublicIPv6, robotsAllowsHomepage } from './security.js';
+import { PRIVACY_VERSION, recordLead, recordOptInScan, eraseByReceipt, deleteExpired } from './records.js';
 
-const MAX_HTML_BYTES = 260_000;
+const MAX_HTML_BYTES = 1_500_000; // bounded partial HTML snapshot for large public homepages
 const MAX_ROBOTS_BYTES = 64_000;
 const REDIRECT_STATUSES = new Set([301,302,303,307,308]);
 const LOCAL_ORIGINS = new Set(['http://127.0.0.1:8000','http://localhost:8000','http://localhost:5500']);
+const captureEnabled = env => env.ENABLE_PRIVATE_CAPTURE === 'true' && Boolean(env.SCAN_DB);
 const sameCanonicalHost = (a, b) => a.replace(/^www\./,'') === b.replace(/^www\./,'');
 
 function cors(origin, env) {
@@ -13,7 +15,7 @@ function cors(origin, env) {
   return {
     'Access-Control-Allow-Origin':origin,
     'Vary':'Origin',
-    'Access-Control-Allow-Methods':'POST, OPTIONS',
+    'Access-Control-Allow-Methods':'GET, POST, OPTIONS',
     'Access-Control-Allow-Headers':'Content-Type',
     'Access-Control-Max-Age':'600'
   };
@@ -30,25 +32,41 @@ function localTest(request) {
   const host = new URL(request.url).hostname;
   return (host === 'localhost' || host === '127.0.0.1') && LOCAL_ORIGINS.has(request.headers.get('Origin'));
 }
-async function readLimited(response, cap) {
+async function readLimited(response, cap, allowPartial=false) {
   if (!response.body) throw new Error('Website returned no readable content.');
-  if (Number(response.headers.get('content-length')) > cap) throw new Error('This homepage is too large for the scanner.');
-  let size=0;
+  // Only the homepage may be sampled. Robots rules must always be read fully.
+  if (!allowPartial && Number(response.headers.get('content-length')) > cap) {
+    throw new Error('Scanning permissions response was too large to verify.');
+  }
   const reader=response.body.getReader();
   const chunks=[];
+  let size=0, partial=false;
   try {
     while (true) {
       const {done,value}=await reader.read();
       if (done) break;
-      size += value.byteLength;
-      if (size > cap) { await reader.cancel(); throw new Error('This homepage is too large for the scanner.'); }
+      const remaining=cap-size;
+      if (value.byteLength>remaining) {
+        if (!allowPartial) throw new Error('Scanning permissions response was too large to verify.');
+        if (remaining>0) chunks.push(value.subarray(0,remaining));
+        size=cap; partial=true;
+        await reader.cancel();
+        break;
+      }
       chunks.push(value);
+      size+=value.byteLength;
+      // When Content-Length proves this is a large homepage, don't continue
+      // downloading it after the bounded sample.
+      if (allowPartial && size===cap && Number(response.headers.get('content-length'))>cap) {
+        partial=true; await reader.cancel(); break;
+      }
     }
-  } finally { reader.releaseLock(); }
+  } finally {reader.releaseLock();}
   const result=new Uint8Array(size);
   let cursor=0;
-  for (const chunk of chunks) { result.set(chunk,cursor); cursor+=chunk.length; }
-  return new TextDecoder('utf-8',{fatal:false}).decode(result);
+  for (const chunk of chunks) {result.set(chunk,cursor); cursor+=chunk.length;}
+  const html=new TextDecoder('utf-8',{fatal:false}).decode(result);
+  return allowPartial ? {html,partial} : html;
 }
 async function requestWithTimeout(url, ms=8000, options={}) {
   const ctrl=new AbortController();
@@ -80,7 +98,7 @@ async function assertPublicDns(hostname) {
 }
 async function checkRobots(url) {
   const robotsUrl=new URL('/robots.txt',url);
-  const res=await requestWithTimeout(robotsUrl,6500,{headers:{'User-Agent':'CommercialGrowthScanner/0.2 (+https://commercialgrowth.ie)','Accept':'text/plain'}});
+  const res=await requestWithTimeout(robotsUrl,6500,{headers:{'User-Agent':'CommercialGrowthScanner/0.3 (+https://commercialgrowth.ie)','Accept':'text/plain'}});
   if (res.status === 404 || res.status === 410) return;
   if (!res.ok) throw new Error('Scanning permissions could not be verified.');
   if (!robotsAllowsHomepage(await readLimited(res,MAX_ROBOTS_BYTES))) throw new Error('This website requests that automated scanning not access its homepage.');
@@ -94,7 +112,7 @@ async function fetchHomepage(url) {
       await checkRobots(current);
       checked.add(current.hostname);
     }
-    const res=await requestWithTimeout(current,9000,{headers:{'User-Agent':'CommercialGrowthScanner/0.2 (+https://commercialgrowth.ie)','Accept':'text/html,application/xhtml+xml;q=0.9'}});
+    const res=await requestWithTimeout(current,9000,{headers:{'User-Agent':'CommercialGrowthScanner/0.3 (+https://commercialgrowth.ie)','Accept':'text/html,application/xhtml+xml;q=0.9'}});
     if (REDIRECT_STATUSES.has(res.status)) {
       const location=res.headers.get('location');
       if (!location) throw new Error('Website redirect was incomplete.');
@@ -106,7 +124,7 @@ async function fetchHomepage(url) {
     if (!res.ok) throw new Error('The homepage returned HTTP '+res.status+'.');
     const contentType=(res.headers.get('content-type') || '').toLowerCase();
     if (!/^\s*(?:text\/html|application\/xhtml\+xml)\b/.test(contentType)) throw new Error('The homepage did not return readable HTML.');
-    return {html:await readLimited(res,MAX_HTML_BYTES),url:current.toString()};
+    return {...await readLimited(res,MAX_HTML_BYTES,true),url:current.toString()};
   }
   throw new Error('The website redirected too many times.');
 }
@@ -135,14 +153,14 @@ async function inspectHTML(html) {
   await output.text();
   return found;
 }
-async function checkTurnstile(token,secret,ip) {
+async function checkTurnstile(token,secret,ip,action='cg_scanner') {
   if(typeof token!=='string' || token.length<10 || token.length>2048) return false;
   const body=new URLSearchParams({secret,response:token});
   if(ip) body.set('remoteip',ip);
   const res=await requestWithTimeout('https://challenges.cloudflare.com/turnstile/v0/siteverify',6000,{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body.toString()});
   if(!res.ok) return false;
   const data=await res.json();
-  return data.success===true && data.action==='cg_scanner' && ['commercialgrowth.ie','www.commercialgrowth.ie'].includes(data.hostname);
+  return data.success===true && data.action===action && ['commercialgrowth.ie','www.commercialgrowth.ie'].includes(data.hostname);
 }
 async function limitRequest(env,ip) {
   // Both bindings are deliberately required for public launch. Rate limits are
@@ -158,24 +176,56 @@ export default {
     const path=new URL(request.url).pathname;
     const origin=request.headers.get('Origin');
     const headers=cors(origin,env);
-    if(path==='/health' && request.method==='GET') return json({ok:true,service:'commercial-growth-scanner',version:'0.2.0',ready:Boolean(env.TURNSTILE_SECRET && env.SCANNER_GLOBAL_LIMIT && env.SCANNER_CLIENT_LIMIT)},200);
-    if(path!=='/scan') return json({ok:false,error:'Not found.'},404);
+    if(path==='/health' && request.method==='GET') return json({ok:true,service:'commercial-growth-scanner',version:'0.3.0',ready:Boolean(env.TURNSTILE_SECRET && env.SCANNER_GLOBAL_LIMIT && env.SCANNER_CLIENT_LIMIT)},200);
+    if(!['/scan','/lead','/capabilities','/withdraw'].includes(path)) return json({ok:false,error:'Not found.'},404);
     if(!headers) return json({ok:false,error:'Origin not allowed.'},403);
     if(request.method==='OPTIONS') return new Response(null,{status:204,headers});
+    if(path==='/capabilities' && request.method==='GET') return json({ok:true,scanHistory:captureEnabled(env),leadSharing:captureEnabled(env),withdrawal:captureEnabled(env),privacyVersion:PRIVACY_VERSION},200,headers);
     if(request.method!=='POST') return json({ok:false,error:'Method not allowed.'},405,headers);
     if(request.headers.get('content-type')?.split(';')[0].trim().toLowerCase()!=='application/json') return json({ok:false,error:'Expected JSON.'},400,headers);
     const length=Number(request.headers.get('content-length')||0);
-    if(length>3000) return json({ok:false,error:'Request too large.'},413,headers);
+    if(length>(path==='/lead'?4500:3000)) return json({ok:false,error:'Request too large.'},413,headers);
     let input;
     try {
       const content=await request.text();
-      if(content.length>3000) throw new Error('Too long');
+      if(content.length>(path==='/lead'?4500:3000)) throw new Error('Too long');
       input=JSON.parse(content);
     } catch {return json({ok:false,error:'Invalid request.'},400,headers);}
     const local=localTest(request);
     // Never allow a published worker to scan before abuse controls are installed.
     if(!local && (!env.TURNSTILE_SECRET || !env.SCANNER_GLOBAL_LIMIT || !env.SCANNER_CLIENT_LIMIT)) {
       return json({ok:false,error:'Scanner setup is not complete yet.'},503,headers);
+    }
+    if(path==='/withdraw') {
+      if(!captureEnabled(env)) return json({ok:false,error:'Private-record management is not available.'},503,headers);
+      try {
+        // No Turnstile required for withdrawal. The bearer code has 256 bits of
+        // entropy, is never placed in a URL and is hashed before database lookup.
+        if(typeof input?.code!=='string' || !/^[a-f0-9]{64}$/.test(input.code))
+          return json({ok:false,error:'Enter a valid private deletion code.'},400,headers);
+        // Fail closed if deployed abuse controls are absent.
+        if(!local && !await limitRequest(env,request.headers.get('CF-Connecting-IP')||''))
+          return json({ok:false,error:'Please retry shortly.'},429,headers);
+        await eraseByReceipt(env.SCAN_DB,input.code);
+        return json({ok:true,message:'Request processed. If a matching record existed, it has been deleted.'},200,headers);
+      } catch {
+        return json({ok:false,error:'Deletion could not be completed. Please contact us for assistance.'},503,headers);
+      }
+    }
+    if(path==='/lead') {
+      if(!captureEnabled(env)) return json({ok:false,error:'Snapshot sharing is not available yet.'},503,headers);
+      try {
+        const ip=request.headers.get('CF-Connecting-IP')||'';
+        if(!local) {
+          if(!await limitRequest(env,ip)) return json({ok:false,error:'Too many requests. Please try again later.'},429,headers);
+          if(!await checkTurnstile(input?.turnstileToken,env.TURNSTILE_SECRET,ip,'cg_lead')) return json({ok:false,error:'Verification expired or unsuccessful. Please retry.'},403,headers);
+        }
+        const receipt=await recordLead(env.SCAN_DB,input);
+        return json({ok:true,withdrawalCode:receipt.code},201,headers);
+      } catch (error) {
+        if(/^(Please |Enter |Invalid |Business link)/.test(String(error?.message))) return json({ok:false,error:error.message},400,headers);
+        return json({ok:false,error:'Snapshot could not be shared right now. Please use email instead.'},503,headers);
+      }
     }
     let target;
     try {target=validatePublicHomepage(input?.url);} catch(e){return json({ok:false,error:e.message},400,headers);}
@@ -187,13 +237,30 @@ export default {
         const verified=await checkTurnstile(input?.turnstileToken,env.TURNSTILE_SECRET,ip);
         if(!verified) return json({ok:false,error:'Verification expired or unsuccessful. Please retry.'},403,headers);
       }
-      const {html,url}=await fetchHomepage(target);
+      const {html,url,partial}=await fetchHomepage(target);
       const observations=await inspectHTML(html);
-      return json(assessHomepage(observations,url),200,headers);
+      const assessment=assessHomepage(observations,url);
+      if (partial) {
+        assessment.partial=true;
+        assessment.summary='Limited homepage preview: only the first 1.5 MB of HTML was reviewed. Elements not found in that sample may exist elsewhere on the page. These are preliminary observations, not a complete website audit.';
+        assessment.findings=(assessment.findings||[]).filter(f=>!/(not found|missing|no clear|could not find|not visible|absence)/i.test(String(f.observation||'')));
+      }
+      // Never store scanned domains without a visitor's affirmative choice.
+      // If storage fails, preserve the free scan but do not claim that it was saved.
+      assessment.scanSaved=false;
+      if(input?.saveScan===true && input?.domainAuthority===true && input?.privacyVersion===PRIVACY_VERSION && captureEnabled(env)) {
+        try { const receipt=await recordOptInScan(env.SCAN_DB,assessment); assessment.scanSaved=true; assessment.withdrawalCode=receipt.code; }
+        catch { assessment.scanSaveError=true; }
+      }
+      return json(assessment,200,headers);
     } catch(error) {
+      // A failed scan does not save a record: there is no safe moment to present a deletion receipt.
       const msg=String(error?.message||'');
       const allowed=/^(Enter |Invalid |Only |The homepage |The website |Website |Could not |This homepage |Scanning permissions)/.test(msg);
       return json({ok:false,error:allowed?msg.slice(0,180):'This website could not be reviewed automatically. Try another public homepage.'},422,headers);
     }
+  },
+  async scheduled(_event,env) {
+    if(env.SCAN_DB) await deleteExpired(env.SCAN_DB);
   }
 };
