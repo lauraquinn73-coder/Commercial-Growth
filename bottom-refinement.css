@@ -1,0 +1,91 @@
+/* Commercial Growth V1.7 — homepage bottom refinement.
+   Additive stylesheet: no changes to scanner, privacy logic, or shared CSS. */
+.contact.contact-refined {
+  padding: clamp(66px, 7vw, 110px) clamp(22px, 5vw, 90px) clamp(70px, 7vw, 108px);
+  background: var(--cream);
+  text-align: left;
+  border-top: 1px solid var(--line);
+}
+.contact-refined-inner {
+  max-width: 1270px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(350px, .85fr);
+  align-items: center;
+  gap: clamp(36px, 7vw, 112px);
+}
+.contact.contact-refined h2 {
+  max-width: 720px;
+  font-size: clamp(43px, 5.2vw, 76px);
+  line-height: 1.085;
+  letter-spacing: -.045em;
+  margin: 12px 0 24px;
+}
+.contact-refined h2 em { color: var(--rose-dark); font-weight: 400; }
+.contact-refined .contact-refined-lede {
+  max-width: 610px;
+  margin: 0;
+  color: var(--muted);
+  font-size: clamp(16px, 1.5vw, 19px);
+  line-height: 1.7;
+}
+.contact-refined .contact-refined-assurance {
+  display: flex; align-items: flex-start; gap: 10px;
+  max-width: 600px; margin: 22px 0 0;
+  font-size: 13px; line-height: 1.55; color: var(--muted);
+}
+.contact-refined-dot { display: inline-block; flex: 0 0 8px; width: 8px; height: 8px; margin-top: 6px; border-radius: 50%; background: var(--rose-dark); }
+.contact-refined-panel {
+  border: 1px solid var(--line);
+  background: var(--white);
+  border-radius: 22px;
+  box-shadow: 0 18px 45px rgba(38, 31, 29, .055);
+  padding: clamp(24px, 3.1vw, 42px);
+}
+.contact-refined .contact-refined-panel-label { color: var(--rose-dark); font-size: 11px; font-weight: 700; letter-spacing: .14em; margin: 0 0 13px; }
+.contact-refined-panel h3 { color: var(--charcoal); font-family: Georgia, 'Times New Roman', serif; font-size: clamp(24px, 2.3vw, 34px); font-weight: 400; line-height: 1.2; margin: 0 0 23px; }
+.contact-refined .contact-refined-actions { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.contact-refined-actions .button { width: 100%; min-height: 54px; justify-content: space-between; text-align: left; padding: 15px 22px; }
+.contact-refined-actions .button span { font-size: 17px; }
+.contact-refined .contact-refined-secondary { margin: 19px 0 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
+.contact-refined-secondary a { color: var(--charcoal); text-decoration: underline; text-underline-offset: 3px; }
+.contact-refined .contact-refined-fineprint { margin: 18px 0 0; border-top: 1px solid var(--line); padding-top: 15px; font-size: 12px; line-height: 1.6; color: var(--muted); }
+footer.cg-footer {
+  display: block; text-align: left; background: var(--cream-2); padding: 0;
+  border-top: 1px solid var(--line); color: var(--muted); font-size: 13px;
+}
+.cg-footer-main, .cg-footer-bottom { max-width: 1420px; margin: 0 auto; padding-left: clamp(22px, 5vw, 90px); padding-right: clamp(22px, 5vw, 90px); }
+.cg-footer-main { display: grid; grid-template-columns: minmax(260px, 1.08fr) minmax(0, 1.3fr); gap: clamp(45px, 8vw, 120px); padding-top: clamp(45px, 5vw, 70px); padding-bottom: clamp(42px, 5vw, 65px); }
+.cg-footer-logo { display: inline-flex; gap: 13px; align-items: center; font-family: Georgia, 'Times New Roman', serif; font-size: clamp(22px, 2vw, 27px); color: var(--charcoal); text-decoration: none; }
+.cg-footer-logo img { width: 54px; height: 54px; display: block; object-fit: contain; }
+.cg-footer-ie { color: var(--rose-dark); }
+.cg-footer-identity p { font-size: 14px; max-width: 340px; line-height: 1.7; margin: 17px 0 0; color: var(--muted); }
+.cg-footer-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; align-items: start; }
+.cg-footer-column { display: flex; flex-direction: column; align-items: flex-start; gap: 13px; }
+.cg-footer-column h3 { margin: 0 0 4px; font: 700 12px/1.4 Arial, sans-serif; text-transform: uppercase; letter-spacing: .11em; color: var(--charcoal); }
+.cg-footer-column a { font-size: 13px; line-height: 1.45; color: var(--muted); text-decoration: none; }
+.cg-footer-column a:hover, .cg-footer-legal a:hover, .cg-footer-legal button:hover { color: var(--rose-dark); text-decoration: underline; text-underline-offset: 3px; }
+.cg-footer-bottom { border-top: 1px solid var(--line); padding-top: 26px; padding-bottom: 30px; display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); column-gap: 52px; row-gap: 17px; }
+.cg-footer-bottom .legal-identity { margin: 0; max-width: 570px; font-size: 12px; line-height: 1.7; }
+.cg-footer-legal { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px 17px; align-content: start; }
+.cg-footer-legal a, .cg-footer-legal .footer-privacy-button { padding: 0; font: inherit; font-size: 12px; color: var(--muted); text-decoration: none; }
+.cg-footer-copy { grid-column: 1 / -1; font-size: 11px; color: var(--muted); }
+.cg-footer a:focus-visible, .cg-footer button:focus-visible, .contact-refined a:focus-visible, .contact-refined button:focus-visible { outline: 2px solid var(--rose-dark); outline-offset: 4px; border-radius: 4px; }
+@media (max-width: 900px) {
+  .contact-refined-inner { grid-template-columns: 1fr; gap: 34px; }
+  .contact-refined-panel { max-width: 620px; }
+  .cg-footer-main { grid-template-columns: 1fr; gap: 38px; }
+  .cg-footer-bottom { grid-template-columns: 1fr; }
+  .cg-footer-legal { justify-content: flex-start; }
+}
+@media (max-width: 640px) {
+  .contact.contact-refined { padding: 66px 22px 72px; }
+  .contact.contact-refined h2 { font-size: clamp(37px, 9vw, 52px); }
+  .contact-refined-panel { border-radius: 18px; padding: 24px 20px; }
+  .contact-refined-actions .button { font-size: 13px; }
+  .cg-footer-logo { font-size: 23px; }
+  .cg-footer-logo img { width: 45px; height: 45px; }
+  .cg-footer-nav { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 34px; }
+  .cg-footer-bottom { padding-top: 23px; padding-bottom: 28px; }
+}
+@media (prefers-reduced-motion: reduce) { .contact-refined .button { transition: none; } }
